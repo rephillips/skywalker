@@ -5,6 +5,7 @@ import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
 import { ErrorAlert } from "../common/ErrorAlert";
 import { LineChartPanel } from "./LineChartPanel";
+import { AreaChartPanel } from "./AreaChartPanel";
 import { BarChartPanel } from "./BarChartPanel";
 import { KpiCard } from "./KpiCard";
 import { TablePanel } from "./TablePanel";
@@ -332,8 +333,9 @@ function VizSwitch({
 }) {
   switch (config.vizType) {
     case "line":
-    case "area":
       return <LineChartPanel config={config} data={data} chartHeight={chartHeight} />;
+    case "area":
+      return <AreaChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "bar":
       return <BarChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "swimlane":

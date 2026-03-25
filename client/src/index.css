@@ -117,6 +117,14 @@ html.light .text-gray-500 { color: #8d8a86; }
 html.light .text-gray-600 { color: #a0a0a0; }
 html.light .text-white { color: #1a1714; }
 
+/* Area chart high opacity fill */
+.area-chart-vivid .recharts-area-area {
+  fill-opacity: 0.7 !important;
+}
+.area-chart-vivid .recharts-area-curve {
+  stroke-width: 2;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
