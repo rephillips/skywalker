@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Check, Pencil } from "lucide-react";
 import { api } from "../../services/api";
 import type { StatusDot } from "../../types/dashboard";
 
@@ -15,8 +15,18 @@ function getColor(value: number, t: StatusDot["thresholds"]): string {
   return "#ef4444";
 }
 
-function Dot({ dot, onRemove }: { dot: StatusDot; onRemove?: () => void }) {
+function Dot({ dot, onEdit, onRemove }: {
+  dot: StatusDot;
+  onEdit?: (updates: Partial<StatusDot>) => void;
+  onRemove?: () => void;
+}) {
   const [value, setValue] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editLabel, setEditLabel] = useState(dot.label);
+  const [editSpl, setEditSpl] = useState(dot.spl);
+  const [editGreen, setEditGreen] = useState(dot.thresholds.green);
+  const [editYellow, setEditYellow] = useState(dot.thresholds.yellow);
+  const [editOrange, setEditOrange] = useState(dot.thresholds.orange);
 
   useEffect(() => {
     if (!dot.spl) return;
@@ -30,8 +40,47 @@ function Dot({ dot, onRemove }: { dot: StatusDot; onRemove?: () => void }) {
 
   const color = value !== null ? getColor(value, dot.thresholds) : "#6b7280";
 
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1 p-2 rounded-lg border border-surface-border bg-surface text-[9px]">
+        <div className="flex items-center gap-1">
+          <input
+            value={editLabel}
+            onChange={(e) => setEditLabel(e.target.value)}
+            className="w-20 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-200 outline-none"
+            placeholder="Name"
+            autoFocus
+          />
+          <input
+            value={editSpl}
+            onChange={(e) => setEditSpl(e.target.value)}
+            className="w-48 rounded border border-surface-border bg-surface-raised px-1 py-0.5 font-mono text-gray-300 outline-none"
+            placeholder="SPL query"
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-emerald-400">G≤</span>
+          <input type="number" value={editGreen} onChange={(e) => setEditGreen(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
+          <span className="text-yellow-400">Y≤</span>
+          <input type="number" value={editYellow} onChange={(e) => setEditYellow(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
+          <span className="text-orange-400">O≤</span>
+          <input type="number" value={editOrange} onChange={(e) => setEditOrange(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
+          <button
+            onClick={() => {
+              if (onEdit) onEdit({ label: editLabel, spl: editSpl, thresholds: { green: editGreen, yellow: editYellow, orange: editOrange } });
+              setEditing(false);
+            }}
+            className="text-emerald-400 p-0.5"
+          ><Check size={10} /></button>
+          <button onClick={() => setEditing(false)} className="text-gray-500 p-0.5"><X size={10} /></button>
+          {onRemove && <button onClick={onRemove} className="text-red-400 p-0.5 ml-auto">Remove</button>}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="group relative flex items-center gap-1">
+    <div className="group relative flex items-center gap-1 cursor-pointer" onClick={() => onEdit && setEditing(true)}>
       <div
         className="w-2.5 h-2.5 rounded-full shrink-0"
         style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}80` }}
@@ -39,9 +88,12 @@ function Dot({ dot, onRemove }: { dot: StatusDot; onRemove?: () => void }) {
       <span className="text-[9px] text-gray-500 whitespace-nowrap">
         {dot.label}{value !== null ? `: ${value}` : ""}
       </span>
+      {onEdit && (
+        <Pencil size={8} className="hidden group-hover:block text-gray-600" />
+      )}
       {onRemove && (
         <button
-          onClick={onRemove}
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
           className="hidden group-hover:flex items-center justify-center w-3 h-3 rounded-full bg-red-500/20 text-red-400"
         >
           <X size={8} />
@@ -69,6 +121,16 @@ export function InlineDots({ dots, onUpdate }: Props) {
     setAdding(false);
   }
 
+  function editDot(index: number, updates: Partial<StatusDot>) {
+    if (!onUpdate) return;
+    onUpdate(dots.map((d, i) => i === index ? { ...d, ...updates } : d));
+  }
+
+  function removeDot(index: number) {
+    if (!onUpdate) return;
+    onUpdate(dots.filter((_, i) => i !== index));
+  }
+
   if (dots.length === 0 && !onUpdate) return null;
 
   return (
@@ -77,16 +139,20 @@ export function InlineDots({ dots, onUpdate }: Props) {
         <Dot
           key={dot.id}
           dot={dot}
-          onRemove={onUpdate ? () => onUpdate(dots.filter((_, j) => j !== i)) : undefined}
+          onEdit={onUpdate ? (u) => editDot(i, u) : undefined}
+          onRemove={onUpdate ? () => removeDot(i) : undefined}
         />
       ))}
       {onUpdate && !adding && (
         <button
           onClick={() => setAdding(true)}
-          className="w-2.5 h-2.5 rounded-full border border-dashed border-gray-600 flex items-center justify-center text-gray-600 hover:text-gray-400 hover:border-gray-400 transition-colors"
+          className="flex items-center gap-1 text-[9px] text-gray-600 hover:text-gray-400 transition-colors"
           title="Add status dot"
         >
-          <Plus size={7} />
+          <div className="w-2.5 h-2.5 rounded-full border border-dashed border-gray-600 flex items-center justify-center">
+            <Plus size={7} />
+          </div>
+          <span>Add dot</span>
         </button>
       )}
       {adding && (
@@ -94,19 +160,19 @@ export function InlineDots({ dots, onUpdate }: Props) {
           <input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
-            className="w-16 rounded border border-surface-border bg-surface px-1 py-0.5 text-[9px] text-gray-300 outline-none"
-            placeholder="Label"
+            className="w-20 rounded border border-surface-border bg-surface px-1 py-0.5 text-[9px] text-gray-300 outline-none"
+            placeholder="Name"
             autoFocus
           />
           <input
             value={newSpl}
             onChange={(e) => setNewSpl(e.target.value)}
-            className="w-40 rounded border border-surface-border bg-surface px-1 py-0.5 text-[9px] font-mono text-gray-300 outline-none"
+            className="w-48 rounded border border-surface-border bg-surface px-1 py-0.5 text-[9px] font-mono text-gray-300 outline-none"
             placeholder="SPL query"
             onKeyDown={(e) => e.key === "Enter" && addDot()}
           />
           <button onClick={addDot} className="text-emerald-400 text-[9px]">Add</button>
-          <button onClick={() => setAdding(false)} className="text-gray-500 text-[9px]">Cancel</button>
+          <button onClick={() => { setAdding(false); setNewLabel(""); setNewSpl(""); }} className="text-gray-500 text-[9px]">Cancel</button>
         </div>
       )}
     </div>
