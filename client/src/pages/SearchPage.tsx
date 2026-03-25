@@ -307,7 +307,7 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
         {/* Chart visualization */}
         {results && results.length > 0 && showChart && chartCategories.length > 0 && (
           <div className="rounded-xl border border-surface-border bg-surface-raised p-4">
-            <div className="h-80">
+            <div className="h-80" key={`${chartType}-${paletteIndex}`}>
               {chartType === "line" && (
                 <LineChart
                   data={chartData}
