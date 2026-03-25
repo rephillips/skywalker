@@ -25,12 +25,8 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
   const [height, setHeight] = useState(
     config.height === "sm" ? 250 : config.height === "lg" ? 550 : 400
   );
-  const [widthPct, setWidthPct] = useState(100);
+  const [width, setWidth] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const resizingY = useRef(false);
-  const resizingX = useRef(false);
-  const startPos = useRef(0);
-  const startVal = useRef(0);
 
   const onResizeYStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -53,38 +49,30 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
 
   const onResizeXStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    resizingX.current = true;
-    startPos.current = e.clientX;
-    startVal.current = widthPct;
-    const parentWidth = containerRef.current?.parentElement?.offsetWidth || 1;
+    const startX = e.clientX;
+    const startW = containerRef.current?.offsetWidth || 600;
 
     const onMove = (ev: MouseEvent) => {
-      if (!resizingX.current) return;
-      const deltaX = ev.clientX - startPos.current;
-      const deltaPct = (deltaX / parentWidth) * 100;
-      setWidthPct(Math.max(25, Math.min(100, startVal.current + deltaPct)));
+      setWidth(Math.max(300, startW + (ev.clientX - startX)));
     };
     const onUp = () => {
-      resizingX.current = false;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [widthPct]);
+  }, []);
 
   const onResizeCornerStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startYPos = e.clientY;
+    const startY = e.clientY;
     const startH = height;
-    const startW = widthPct;
-    const parentWidth = containerRef.current?.parentElement?.offsetWidth || 1;
+    const startW = containerRef.current?.offsetWidth || 600;
 
     const onMove = (ev: MouseEvent) => {
-      setHeight(Math.max(200, startH + (ev.clientY - startYPos)));
-      const deltaPct = ((ev.clientX - startX) / parentWidth) * 100;
-      setWidthPct(Math.max(25, Math.min(100, startW + deltaPct)));
+      setHeight(Math.max(200, startH + (ev.clientY - startY)));
+      setWidth(Math.max(300, startW + (ev.clientX - startX)));
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
@@ -92,7 +80,7 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [height, widthPct]);
+  }, [height]);
 
   const chartHeight = height - 90;
 
@@ -100,7 +88,7 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
     <div
       ref={containerRef}
       className="relative rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col"
-      style={{ height, width: `${widthPct}%` }}
+      style={{ height, width: width ?? "100%" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2 shrink-0">
