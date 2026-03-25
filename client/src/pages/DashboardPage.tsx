@@ -3,22 +3,18 @@ import { Plus } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { PanelGrid } from "../components/panels/PanelGrid";
 import { AddPanelModal } from "../components/panels/AddPanelModal";
-import { defaultDashboard } from "../config/dashboards";
 import { useCustomPanels } from "../hooks/useCustomPanels";
 
 export function DashboardPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const { panels: customPanels, addPanel, removePanel } = useCustomPanels();
 
-  const allPanels = [...defaultDashboard.panels, ...customPanels];
-
   return (
     <div className="flex-1 flex flex-col">
-      <TopBar title={defaultDashboard.title} />
+      <TopBar title="Dashboard" />
       <div className="flex items-center justify-between px-6 pt-4">
         <span className="text-xs text-gray-500">
-          {allPanels.length} panel{allPanels.length !== 1 && "s"}
-          {customPanels.length > 0 && ` (${customPanels.length} custom)`}
+          {customPanels.length} panel{customPanels.length !== 1 && "s"}
         </span>
         <button
           onClick={() => setShowAddModal(true)}
@@ -28,11 +24,17 @@ export function DashboardPage() {
           Add Panel
         </button>
       </div>
-      <PanelGrid
-        panels={allPanels}
-        onRemovePanel={removePanel}
-        customPanelIds={new Set(customPanels.map((p) => p.id))}
-      />
+      {customPanels.length > 0 ? (
+        <PanelGrid
+          panels={customPanels}
+          onRemovePanel={removePanel}
+          customPanelIds={new Set(customPanels.map((p) => p.id))}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-gray-500">Click "Add Panel" to create your first timechart.</p>
+        </div>
+      )}
       {showAddModal && (
         <AddPanelModal
           onAdd={addPanel}
