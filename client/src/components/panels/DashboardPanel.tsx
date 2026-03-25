@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash } from "lucide-react";
+import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash, Rows3 } from "lucide-react";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
@@ -8,6 +8,8 @@ import { LineChartPanel } from "./LineChartPanel";
 import { BarChartPanel } from "./BarChartPanel";
 import { KpiCard } from "./KpiCard";
 import { TablePanel } from "./TablePanel";
+import { SwimLanePanel } from "./SwimLanePanel";
+import { StatusDotsPanel } from "./StatusDotsPanel";
 
 interface Props {
   config: PanelConfig;
@@ -216,6 +218,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 { type: "line", icon: LineIcon },
                 { type: "area", icon: AreaIcon },
                 { type: "bar", icon: BarChart3 },
+                { type: "swimlane", icon: Rows3 },
                 { type: "table", icon: Table2 },
                 { type: "kpi", icon: Hash },
               ] as const).map(({ type, icon: Icon }) => (
@@ -264,7 +267,16 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
 
       {/* Content */}
       <div style={{ height: chartHeight }}>
-        {loading && !data ? (
+        {config.vizType === "donut" ? (
+          <StatusDotsPanel
+            dots={config.chartOptions?.statusDots || [
+              { id: "default", label: "Status", spl: config.spl, thresholds: { green: 100, yellow: 500, orange: 1000 } },
+            ]}
+            onUpdateDots={onUpdate ? (dots) => onUpdate({
+              chartOptions: { ...config.chartOptions, statusDots: dots },
+            }) : undefined}
+          />
+        ) : loading && !data ? (
           <LoadingSpinner />
         ) : error ? (
           <ErrorAlert message={error} />
@@ -324,6 +336,10 @@ function VizSwitch({
       return <LineChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "bar":
       return <BarChartPanel config={config} data={data} chartHeight={chartHeight} />;
+    case "swimlane":
+      return <SwimLanePanel config={config} data={data} chartHeight={chartHeight} />;
+    case "donut":
+      return null; // Status dots rendered separately
     case "kpi":
       return <KpiCard config={config} data={data} />;
     case "table":

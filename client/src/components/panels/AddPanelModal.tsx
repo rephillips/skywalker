@@ -20,8 +20,10 @@ const CHART_TYPES: { label: string; value: VizType }[] = [
   { label: "Line Chart", value: "line" },
   { label: "Area Chart", value: "area" },
   { label: "Bar Chart", value: "bar" },
+  { label: "Swimlane", value: "swimlane" },
   { label: "Table", value: "table" },
   { label: "KPI Card", value: "kpi" },
+  { label: "Status Dots", value: "donut" },
 ];
 
 const SPAN_OPTIONS = [

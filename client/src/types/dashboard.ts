@@ -1,10 +1,18 @@
-export type VizType = "line" | "bar" | "area" | "kpi" | "table" | "donut";
+export type VizType = "line" | "bar" | "area" | "kpi" | "table" | "donut" | "swimlane";
+
+export interface StatusDot {
+  id: string;
+  label: string;
+  spl: string;
+  thresholds: { green: number; yellow: number; orange: number };
+}
 
 export interface ChartOptions {
   index?: string;
   categories?: string[];
   colors?: string[];
   valueFormatter?: (value: number) => string;
+  statusDots?: StatusDot[];
 }
 
 export interface PanelConfig {
