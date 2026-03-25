@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { RefreshCw, Trash2, GripVertical } from "lucide-react";
+import { RefreshCw, Trash2, GripVertical, Pencil, Check, X } from "lucide-react";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
@@ -12,10 +12,15 @@ import { TablePanel } from "./TablePanel";
 interface Props {
   config: PanelConfig;
   onRemove?: () => void;
+  onUpdate?: (updates: Partial<PanelConfig>) => void;
   dragHandleProps?: Record<string, any>;
 }
 
-export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
+export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: Props) {
+  const [editing, setEditing] = useState(false);
+  const [editSpl, setEditSpl] = useState(config.spl);
+  const [editTitle, setEditTitle] = useState(config.title);
+
   const { data, loading, error, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
     latest: config.latest,
@@ -101,30 +106,93 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
               <GripVertical size={14} />
             </div>
           )}
-          <h3 className="text-sm font-medium text-gray-300">{config.title}</h3>
+          {editing ? (
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="text-sm font-medium text-gray-100 bg-surface border border-surface-border rounded px-2 py-0.5 outline-none focus:border-brand-500"
+              autoFocus
+            />
+          ) : (
+            <h3 className="text-sm font-medium text-gray-300">{config.title}</h3>
+          )}
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={refetch}
-            className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          </button>
-          {onRemove && (
-            <button
-              onClick={onRemove}
-              className="rounded-md p-1 text-gray-500 hover:text-red-400 hover:bg-surface-hover transition-colors"
-              title="Remove panel"
-            >
-              <Trash2 size={14} />
-            </button>
+          {editing ? (
+            <>
+              <button
+                onClick={() => {
+                  if (onUpdate) {
+                    onUpdate({ spl: editSpl, title: editTitle });
+                  }
+                  setEditing(false);
+                }}
+                className="rounded-md p-1 text-emerald-400 hover:bg-surface-hover transition-colors"
+                title="Save"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                onClick={() => {
+                  setEditSpl(config.spl);
+                  setEditTitle(config.title);
+                  setEditing(false);
+                }}
+                className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
+                title="Cancel"
+              >
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <>
+              {onUpdate && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
+                  title="Edit search"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+              <button
+                onClick={refetch}
+                className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+              </button>
+              {onRemove && (
+                <button
+                  onClick={onRemove}
+                  className="rounded-md p-1 text-gray-500 hover:text-red-400 hover:bg-surface-hover transition-colors"
+                  title="Remove panel"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
+      {/* Edit SPL */}
+      {editing && (
+        <div className="mb-2 shrink-0">
+          <textarea
+            value={editSpl}
+            onChange={(e) => setEditSpl(e.target.value)}
+            rows={3}
+            className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-gray-100 font-mono outline-none focus:border-brand-500 resize-none"
+            spellCheck={false}
+            placeholder="index=_internal | timechart span=1m count by host"
+          />
+        </div>
+      )}
+
       {/* Content */}
-      <div style={{ height: chartHeight }}>
+      <div style={{ height: editing ? chartHeight - 80 : chartHeight }}>
         {loading && !data ? (
           <LoadingSpinner />
         ) : error ? (

@@ -7,7 +7,7 @@ import { useCustomPanels } from "../hooks/useCustomPanels";
 
 export function DashboardPage() {
   const [showAddModal, setShowAddModal] = useState(false);
-  const { panels: customPanels, addPanel, removePanel, reorderPanels } = useCustomPanels();
+  const { panels: customPanels, addPanel, removePanel, updatePanel, reorderPanels } = useCustomPanels();
 
   return (
     <div className="flex-1 flex flex-col">
@@ -28,6 +28,7 @@ export function DashboardPage() {
         <PanelGrid
           panels={customPanels}
           onRemovePanel={removePanel}
+          onUpdatePanel={updatePanel}
           onReorder={reorderPanels}
           customPanelIds={new Set(customPanels.map((p) => p.id))}
         />

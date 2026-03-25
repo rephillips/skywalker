@@ -20,6 +20,7 @@ import { DashboardPanel } from "./DashboardPanel";
 interface Props {
   panels: PanelConfig[];
   onRemovePanel?: (id: string) => void;
+  onUpdatePanel?: (id: string, updates: Partial<PanelConfig>) => void;
   onReorder?: (activeId: string, overId: string) => void;
   customPanelIds?: Set<string>;
 }
@@ -27,9 +28,11 @@ interface Props {
 function SortablePanel({
   panel,
   onRemove,
+  onUpdate,
 }: {
   panel: PanelConfig;
   onRemove?: () => void;
+  onUpdate?: (updates: Partial<PanelConfig>) => void;
 }) {
   const {
     attributes,
@@ -52,13 +55,14 @@ function SortablePanel({
       <DashboardPanel
         config={panel}
         onRemove={onRemove}
+        onUpdate={onUpdate}
         dragHandleProps={listeners}
       />
     </div>
   );
 }
 
-export function PanelGrid({ panels, onRemovePanel, onReorder, customPanelIds }: Props) {
+export function PanelGrid({ panels, onRemovePanel, onUpdatePanel, onReorder, customPanelIds }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -82,6 +86,11 @@ export function PanelGrid({ panels, onRemovePanel, onReorder, customPanelIds }: 
               onRemove={
                 customPanelIds?.has(panel.id) && onRemovePanel
                   ? () => onRemovePanel(panel.id)
+                  : undefined
+              }
+              onUpdate={
+                customPanelIds?.has(panel.id) && onUpdatePanel
+                  ? (updates) => onUpdatePanel(panel.id, updates)
                   : undefined
               }
             />
