@@ -21,6 +21,7 @@ const CHART_TYPES: { label: string; value: VizType }[] = [
   { label: "Area Chart", value: "area" },
   { label: "Bar Chart", value: "bar" },
   { label: "Swimlane", value: "swimlane" },
+  { label: "Overlay (multi-search)", value: "overlay" },
   { label: "Table", value: "table" },
   { label: "KPI Card", value: "kpi" },
   { label: "Status Dots", value: "donut" },

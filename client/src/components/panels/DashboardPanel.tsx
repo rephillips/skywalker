@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash, Rows3 } from "lucide-react";
+import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash, Rows3, Layers } from "lucide-react";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
@@ -12,6 +12,7 @@ import { TablePanel } from "./TablePanel";
 import { SwimLanePanel } from "./SwimLanePanel";
 import { StatusDotsPanel } from "./StatusDotsPanel";
 import { StatusIndicator } from "./StatusIndicator";
+import { OverlayChartPanel } from "./OverlayChartPanel";
 
 interface Props {
   config: PanelConfig;
@@ -236,6 +237,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 { type: "area", icon: AreaIcon },
                 { type: "bar", icon: BarChart3 },
                 { type: "swimlane", icon: Rows3 },
+                { type: "overlay", icon: Layers },
                 { type: "table", icon: Table2 },
                 { type: "kpi", icon: Hash },
               ] as const).map(({ type, icon: Icon }) => (
@@ -318,7 +320,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
         ) : error ? (
           <ErrorAlert message={error} />
         ) : data && data.length > 0 ? (
-          <VizSwitch config={config} data={data} chartHeight={chartHeight} />
+          <VizSwitch config={config} data={data} chartHeight={chartHeight} onUpdate={onUpdate} />
         ) : data && data.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
@@ -362,10 +364,12 @@ function VizSwitch({
   config,
   data,
   chartHeight,
+  onUpdate,
 }: {
   config: PanelConfig;
   data: NonNullable<ReturnType<typeof useSplunkSearch>["data"]>;
   chartHeight: number;
+  onUpdate?: (updates: Partial<PanelConfig>) => void;
 }) {
   switch (config.vizType) {
     case "line":
@@ -374,6 +378,8 @@ function VizSwitch({
       return <AreaChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "bar":
       return <BarChartPanel config={config} data={data} chartHeight={chartHeight} />;
+    case "overlay":
+      return <OverlayChartPanel config={config} data={data} chartHeight={chartHeight} onUpdate={onUpdate} />;
     case "swimlane":
       return <SwimLanePanel config={config} data={data} chartHeight={chartHeight} />;
     case "donut":

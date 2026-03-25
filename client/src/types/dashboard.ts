@@ -1,4 +1,4 @@
-export type VizType = "line" | "bar" | "area" | "kpi" | "table" | "donut" | "swimlane";
+export type VizType = "line" | "bar" | "area" | "kpi" | "table" | "donut" | "swimlane" | "overlay";
 
 export interface StatusDot {
   id: string;
@@ -7,12 +7,20 @@ export interface StatusDot {
   thresholds: { green: number; yellow: number; orange: number };
 }
 
+export interface OverlaySearch {
+  id: string;
+  label: string;
+  spl: string;
+  color?: string;
+}
+
 export interface ChartOptions {
   index?: string;
   categories?: string[];
   colors?: string[];
   valueFormatter?: (value: number) => string;
   statusDots?: StatusDot[];
+  overlaySearches?: OverlaySearch[];
 }
 
 export interface PanelConfig {
