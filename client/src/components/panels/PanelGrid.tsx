@@ -78,7 +78,7 @@ export function PanelGrid({ panels, onRemovePanel, onUpdatePanel, onReorder, cus
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={panels.map((p) => p.id)} strategy={rectSortingStrategy}>
-        <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-wrap items-start gap-4 p-6">
           {panels.map((panel) => (
             <SortablePanel
               key={panel.id}
