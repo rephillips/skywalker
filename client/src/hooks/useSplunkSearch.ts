@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { useGlobalTime } from "./useGlobalTime";
 import type { SplunkResult } from "../types/splunk";
 
 interface UseSplunkSearchOptions {
@@ -19,22 +20,27 @@ export function useSplunkSearch(
   spl: string,
   options: UseSplunkSearchOptions = {}
 ): UseSplunkSearchResult {
+  const globalTime = useGlobalTime();
   const [data, setData] = useState<SplunkResult[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Use global time unless panel has its own time range set
+  const earliest = options.earliest || globalTime.earliest;
+  const latest = options.latest || globalTime.latest;
 
   const execute = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.search(spl, options.earliest, options.latest);
+      const response = await api.search(spl, earliest, latest);
       setData(response.results);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [spl, options.earliest, options.latest]);
+  }, [spl, earliest, latest]);
 
   useEffect(() => {
     execute();
