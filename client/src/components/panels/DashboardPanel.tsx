@@ -16,6 +16,8 @@ interface Props {
   dragHandleProps?: Record<string, any>;
 }
 
+const DEFAULT_HEIGHT = 400;
+
 export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: Props) {
   const [editing, setEditing] = useState(false);
   const [editSpl, setEditSpl] = useState(config.spl);
@@ -30,30 +32,32 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
     refreshInterval: config.refreshInterval,
   });
 
-  const [height, setHeight] = useState(
-    config.height === "sm" ? 250 : config.height === "lg" ? 550 : 400
-  );
-  const [width, setWidth] = useState<number | null>(null);
+  const [height, setHeight] = useState(config.pixelHeight || DEFAULT_HEIGHT);
+  const [width, setWidth] = useState<number | null>(config.pixelWidth || null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const saveSize = useCallback((h: number, w: number | null) => {
+    if (onUpdate) {
+      onUpdate({ pixelHeight: h, pixelWidth: w || undefined });
+    }
+  }, [onUpdate]);
 
   const onResizeYStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    resizingY.current = true;
-    startPos.current = e.clientY;
-    startVal.current = height;
+    const startY = e.clientY;
+    const startH = height;
 
     const onMove = (ev: MouseEvent) => {
-      if (!resizingY.current) return;
-      setHeight(Math.max(200, startVal.current + (ev.clientY - startPos.current)));
+      setHeight(Math.max(200, startH + (ev.clientY - startY)));
     };
     const onUp = () => {
-      resizingY.current = false;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      setHeight((h) => { saveSize(h, width); return h; });
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [height]);
+  }, [height, width, saveSize]);
 
   const onResizeXStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -66,10 +70,11 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      setWidth((w) => { saveSize(height, w); return w; });
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, []);
+  }, [height, saveSize]);
 
   const onResizeCornerStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,12 +90,16 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      setHeight((h) => {
+        setWidth((w) => { saveSize(h, w); return w; });
+        return h;
+      });
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [height]);
+  }, [height, saveSize]);
 
-  const chartHeight = height - 90;
+  const chartHeight = height - (editing ? 170 : 90);
 
   return (
     <div
@@ -163,7 +172,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 <button
                   onClick={() => setEditing(true)}
                   className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
-                  title="Edit search"
+                  title="Edit panel"
                 >
                   <Pencil size={14} />
                 </button>
@@ -201,7 +210,6 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
             placeholder="index=_internal | timechart span=1m count by host"
           />
           <div className="flex items-center gap-3">
-            {/* Viz type */}
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-gray-500 mr-1">Chart:</span>
               {([
@@ -225,7 +233,6 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 </button>
               ))}
             </div>
-            {/* Time range */}
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-gray-500">Time:</span>
               <select
@@ -240,7 +247,6 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 <option value="-7d">7d</option>
               </select>
             </div>
-            {/* Refresh */}
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-gray-500">Refresh:</span>
               <input
@@ -257,7 +263,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
       )}
 
       {/* Content */}
-      <div style={{ height: editing ? chartHeight - 80 : chartHeight }}>
+      <div style={{ height: chartHeight }}>
         {loading && !data ? (
           <LoadingSpinner />
         ) : error ? (

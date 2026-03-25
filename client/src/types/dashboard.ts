@@ -17,6 +17,8 @@ export interface PanelConfig {
   refreshInterval?: number;
   span?: 1 | 2 | 3 | 4;
   height?: "sm" | "md" | "lg";
+  pixelHeight?: number;
+  pixelWidth?: number;
   chartOptions?: ChartOptions;
 }
 
