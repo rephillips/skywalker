@@ -66,7 +66,12 @@ export function DashboardPanel({ config, onRemove }: Props) {
         ) : error ? (
           <ErrorAlert message={error} />
         ) : data && data.length > 0 ? (
-          <VizSwitch config={config} data={data} />
+          <>
+            <div className="text-[10px] text-gray-600 mb-1">
+              {data.length} rows | viz: {config.vizType} | fields: {Object.keys(data[0]).join(", ")}
+            </div>
+            <VizSwitch config={config} data={data} />
+          </>
         ) : data && data.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
