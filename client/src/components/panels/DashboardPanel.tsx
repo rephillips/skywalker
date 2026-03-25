@@ -5,8 +5,9 @@ import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
 import { ErrorAlert } from "../common/ErrorAlert";
-import { LineChartPanel } from "./LineChartPanel";
-import { BarChartPanel } from "./BarChartPanel";
+import { SplunkLineChart } from "./SplunkLineChart";
+import { SplunkBarChart } from "./SplunkBarChart";
+import { SplunkAreaChart } from "./SplunkAreaChart";
 import { KpiCard } from "./KpiCard";
 import { TablePanel } from "./TablePanel";
 
@@ -123,10 +124,11 @@ function VizSwitch({
 }) {
   switch (config.vizType) {
     case "line":
+      return <SplunkLineChart config={config} data={data} />;
     case "area":
-      return <LineChartPanel config={config} data={data} />;
+      return <SplunkAreaChart config={config} data={data} />;
     case "bar":
-      return <BarChartPanel config={config} data={data} />;
+      return <SplunkBarChart config={config} data={data} />;
     case "kpi":
       return <KpiCard config={config} data={data} />;
     case "table":
