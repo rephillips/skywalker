@@ -24,7 +24,7 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
   });
 
   const [height, setHeight] = useState(
-    config.height === "sm" ? 180 : config.height === "lg" ? 450 : 320
+    config.height === "sm" ? 250 : config.height === "lg" ? 550 : 400
   );
   const resizing = useRef(false);
   const startY = useRef(0);
@@ -90,14 +90,14 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-h-0">
+      {/* Content — chart height = panel height minus header/padding/resize */}
+      <div style={{ height: height - 90 }}>
         {loading && !data ? (
           <LoadingSpinner />
         ) : error ? (
           <ErrorAlert message={error} />
         ) : data && data.length > 0 ? (
-          <VizSwitch config={config} data={data} />
+          <VizSwitch config={config} data={data} chartHeight={height - 90} />
         ) : data && data.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
@@ -117,16 +117,18 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
 function VizSwitch({
   config,
   data,
+  chartHeight,
 }: {
   config: PanelConfig;
   data: NonNullable<ReturnType<typeof useSplunkSearch>["data"]>;
+  chartHeight: number;
 }) {
   switch (config.vizType) {
     case "line":
     case "area":
-      return <LineChartPanel config={config} data={data} />;
+      return <LineChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "bar":
-      return <BarChartPanel config={config} data={data} />;
+      return <BarChartPanel config={config} data={data} chartHeight={chartHeight} />;
     case "kpi":
       return <KpiCard config={config} data={data} />;
     case "table":
