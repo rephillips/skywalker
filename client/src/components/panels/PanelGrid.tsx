@@ -18,7 +18,7 @@ export function PanelGrid({ panels, onRemovePanel, customPanelIds }: Props) {
   return (
     <div className="grid grid-cols-4 gap-4 p-6">
       {panels.map((panel) => (
-        <div key={panel.id} className={spanClass[panel.span ?? 2]}>
+        <div key={panel.id} className={spanClass[Number(panel.span) || 2]}>
           <DashboardPanel
             config={panel}
             onRemove={

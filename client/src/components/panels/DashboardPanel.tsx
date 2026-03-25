@@ -65,8 +65,10 @@ export function DashboardPanel({ config, onRemove }: Props) {
           <LoadingSpinner />
         ) : error ? (
           <ErrorAlert message={error} />
-        ) : data ? (
+        ) : data && data.length > 0 ? (
           <VizSwitch config={config} data={data} />
+        ) : data && data.length === 0 ? (
+          <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
       </div>
     </div>
