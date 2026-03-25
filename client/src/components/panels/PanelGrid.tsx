@@ -40,12 +40,10 @@ function SortablePanel({
     isDragging,
   } = useSortable({ id: panel.id });
 
-  const span = Number(panel.span) || 4;
-  const widthPercent = (span / 4) * 100;
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    width: `calc(${widthPercent}% - ${span < 4 ? "12px" : "0px"})`,
+    width: "100%",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 50 : undefined,
   };

@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from "react";
 import { RefreshCw, Trash2, GripVertical } from "lucide-react";
-import clsx from "clsx";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
@@ -26,36 +25,82 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
   const [height, setHeight] = useState(
     config.height === "sm" ? 250 : config.height === "lg" ? 550 : 400
   );
-  const resizing = useRef(false);
-  const startY = useRef(0);
-  const startH = useRef(0);
+  const [widthPct, setWidthPct] = useState(100);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const resizingY = useRef(false);
+  const resizingX = useRef(false);
+  const startPos = useRef(0);
+  const startVal = useRef(0);
 
-  const onResizeStart = useCallback((e: React.MouseEvent) => {
+  const onResizeYStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    resizing.current = true;
-    startY.current = e.clientY;
-    startH.current = height;
+    resizingY.current = true;
+    startPos.current = e.clientY;
+    startVal.current = height;
 
     const onMove = (ev: MouseEvent) => {
-      if (!resizing.current) return;
-      const delta = ev.clientY - startY.current;
-      setHeight(Math.max(150, startH.current + delta));
+      if (!resizingY.current) return;
+      setHeight(Math.max(200, startVal.current + (ev.clientY - startPos.current)));
     };
-
     const onUp = () => {
-      resizing.current = false;
+      resizingY.current = false;
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, [height]);
 
+  const onResizeXStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingX.current = true;
+    startPos.current = e.clientX;
+    startVal.current = widthPct;
+    const parentWidth = containerRef.current?.parentElement?.offsetWidth || 1;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizingX.current) return;
+      const deltaX = ev.clientX - startPos.current;
+      const deltaPct = (deltaX / parentWidth) * 100;
+      setWidthPct(Math.max(25, Math.min(100, startVal.current + deltaPct)));
+    };
+    const onUp = () => {
+      resizingX.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [widthPct]);
+
+  const onResizeCornerStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startYPos = e.clientY;
+    const startH = height;
+    const startW = widthPct;
+    const parentWidth = containerRef.current?.parentElement?.offsetWidth || 1;
+
+    const onMove = (ev: MouseEvent) => {
+      setHeight(Math.max(200, startH + (ev.clientY - startYPos)));
+      const deltaPct = ((ev.clientX - startX) / parentWidth) * 100;
+      setWidthPct(Math.max(25, Math.min(100, startW + deltaPct)));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [height, widthPct]);
+
+  const chartHeight = height - 90;
+
   return (
     <div
-      className="rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col"
-      style={{ height }}
+      ref={containerRef}
+      className="relative rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col"
+      style={{ height, width: `${widthPct}%` }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2 shrink-0">
@@ -90,25 +135,41 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
         </div>
       </div>
 
-      {/* Content — chart height = panel height minus header/padding/resize */}
-      <div style={{ height: height - 90 }}>
+      {/* Content */}
+      <div style={{ height: chartHeight }}>
         {loading && !data ? (
           <LoadingSpinner />
         ) : error ? (
           <ErrorAlert message={error} />
         ) : data && data.length > 0 ? (
-          <VizSwitch config={config} data={data} chartHeight={height - 90} />
+          <VizSwitch config={config} data={data} chartHeight={chartHeight} />
         ) : data && data.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
       </div>
 
-      {/* Resize handle */}
+      {/* Bottom resize handle */}
       <div
-        onMouseDown={onResizeStart}
-        className="h-2 shrink-0 cursor-ns-resize flex items-center justify-center group mt-1"
+        onMouseDown={onResizeYStart}
+        className="absolute bottom-0 left-0 right-4 h-2 cursor-ns-resize flex items-center justify-center group"
       >
-        <div className="w-12 h-1 rounded-full bg-surface-border group-hover:bg-gray-500 transition-colors" />
+        <div className="w-16 h-1 rounded-full bg-surface-border group-hover:bg-gray-500 transition-colors" />
+      </div>
+
+      {/* Right resize handle */}
+      <div
+        onMouseDown={onResizeXStart}
+        className="absolute top-4 right-0 bottom-4 w-2 cursor-ew-resize flex items-center justify-center group"
+      >
+        <div className="h-16 w-1 rounded-full bg-surface-border group-hover:bg-gray-500 transition-colors" />
+      </div>
+
+      {/* Corner resize handle */}
+      <div
+        onMouseDown={onResizeCornerStart}
+        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize group"
+      >
+        <div className="absolute bottom-1 right-1 w-2 h-2 border-b-2 border-r-2 border-surface-border group-hover:border-gray-500 transition-colors" />
       </div>
     </div>
   );
