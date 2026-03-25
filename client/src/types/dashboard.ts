@@ -40,6 +40,7 @@ export interface PanelConfig {
     spl: string;
     thresholds: { green: number; yellow: number; orange: number };
   };
+  inlineDots?: StatusDot[];
 }
 
 export interface DashboardConfig {

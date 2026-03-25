@@ -12,6 +12,7 @@ import { TablePanel } from "./TablePanel";
 import { SwimLanePanel } from "./SwimLanePanel";
 import { StatusDotsPanel } from "./StatusDotsPanel";
 import { StatusIndicator } from "./StatusIndicator";
+import { InlineDots } from "./InlineDots";
 import { OverlayChartPanel } from "./OverlayChartPanel";
 
 interface Props {
@@ -302,6 +303,14 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
             )}
           </div>
         </div>
+      )}
+
+      {/* Inline status dots */}
+      {(config.inlineDots?.length || onUpdate) && config.vizType !== "donut" && (
+        <InlineDots
+          dots={config.inlineDots || []}
+          onUpdate={onUpdate ? (dots) => onUpdate({ inlineDots: dots }) : undefined}
+        />
       )}
 
       {/* Content */}
