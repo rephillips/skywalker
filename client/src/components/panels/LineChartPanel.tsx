@@ -37,7 +37,7 @@ export function LineChartPanel({ config, data }: Props) {
   });
 
   return (
-    <div className="h-56">
+    <div className="h-full">
       <LineChart
         data={chartData}
         index={index}

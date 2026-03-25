@@ -26,7 +26,7 @@ export function BarChartPanel({ config, data }: Props) {
   });
 
   return (
-    <div className="h-56">
+    <div className="h-full">
       <BarChart
         data={chartData}
         index={index}

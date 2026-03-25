@@ -1,4 +1,5 @@
-import { RefreshCw, Trash2 } from "lucide-react";
+import { useState, useCallback, useRef } from "react";
+import { RefreshCw, Trash2, GripVertical } from "lucide-react";
 import clsx from "clsx";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
@@ -12,33 +13,63 @@ import { TablePanel } from "./TablePanel";
 interface Props {
   config: PanelConfig;
   onRemove?: () => void;
+  dragHandleProps?: Record<string, any>;
 }
 
-const heightMap = {
-  sm: "min-h-[160px]",
-  md: "min-h-[280px]",
-  lg: "min-h-[400px]",
-};
-
-export function DashboardPanel({ config, onRemove }: Props) {
+export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
   const { data, loading, error, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
     latest: config.latest,
     refreshInterval: config.refreshInterval,
   });
 
-  const height = heightMap[config.height || "md"];
+  const [height, setHeight] = useState(
+    config.height === "sm" ? 180 : config.height === "lg" ? 450 : 320
+  );
+  const resizing = useRef(false);
+  const startY = useRef(0);
+  const startH = useRef(0);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizing.current = true;
+    startY.current = e.clientY;
+    startH.current = height;
+
+    const onMove = (ev: MouseEvent) => {
+      if (!resizing.current) return;
+      const delta = ev.clientY - startY.current;
+      setHeight(Math.max(150, startH.current + delta));
+    };
+
+    const onUp = () => {
+      resizing.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, [height]);
 
   return (
     <div
-      className={clsx(
-        "rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col",
-        height
-      )}
+      className="rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col"
+      style={{ height }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-300">{config.title}</h3>
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <div className="flex items-center gap-2">
+          {dragHandleProps && (
+            <div
+              {...dragHandleProps}
+              className="cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors"
+            >
+              <GripVertical size={14} />
+            </div>
+          )}
+          <h3 className="text-sm font-medium text-gray-300">{config.title}</h3>
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={refetch}
@@ -60,21 +91,24 @@ export function DashboardPanel({ config, onRemove }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         {loading && !data ? (
           <LoadingSpinner />
         ) : error ? (
           <ErrorAlert message={error} />
         ) : data && data.length > 0 ? (
-          <>
-            <div className="text-[10px] text-gray-600 mb-1">
-              {data.length} rows | viz: {config.vizType} | fields: {Object.keys(data[0]).join(", ")}
-            </div>
-            <VizSwitch config={config} data={data} />
-          </>
+          <VizSwitch config={config} data={data} />
         ) : data && data.length === 0 ? (
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
+      </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={onResizeStart}
+        className="h-2 shrink-0 cursor-ns-resize flex items-center justify-center group mt-1"
+      >
+        <div className="w-12 h-1 rounded-full bg-surface-border group-hover:bg-gray-500 transition-colors" />
       </div>
     </div>
   );

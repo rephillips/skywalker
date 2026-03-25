@@ -43,5 +43,18 @@ export function useCustomPanels() {
     });
   }, []);
 
-  return { panels, addPanel, removePanel, updatePanel };
+  const reorderPanels = useCallback((activeId: string, overId: string) => {
+    setPanels((prev) => {
+      const oldIndex = prev.findIndex((p) => p.id === activeId);
+      const newIndex = prev.findIndex((p) => p.id === overId);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(oldIndex, 1);
+      next.splice(newIndex, 0, moved);
+      save(next);
+      return next;
+    });
+  }, []);
+
+  return { panels, addPanel, removePanel, updatePanel, reorderPanels };
 }
