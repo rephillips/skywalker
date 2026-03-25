@@ -26,16 +26,18 @@ export function BarChartPanel({ config, data }: Props) {
   });
 
   return (
-    <BarChart
-      data={chartData}
-      index={index}
-      categories={categories}
-      colors={NEON_COLORS.slice(0, categories.length)}
-      yAxisWidth={48}
-      showAnimation
-      showLegend
-      legendPosition="right"
-      className="h-full"
-    />
+    <div className="h-56">
+      <BarChart
+        data={chartData}
+        index={index}
+        categories={categories}
+        colors={NEON_COLORS.slice(0, categories.length)}
+        yAxisWidth={48}
+        showAnimation
+        showLegend
+        legendPosition="right"
+        className="h-full"
+      />
+    </div>
   );
 }

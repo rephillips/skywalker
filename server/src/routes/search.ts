@@ -16,7 +16,7 @@ router.post("/search", async (req, res, next) => {
       res.status(400).json({ error: "spl field is required" });
       return;
     }
-    console.log(`[Search] SPL: ${spl} | earliest: ${earliest} | latest: ${latest}`);
+    console.log(`[Search] SPL: ${spl}  earliest=${earliest}  latest=${latest}`);
     const results = await executeSearch(spl, earliest, latest);
     console.log(`[Search] Results: ${results?.results?.length ?? 0} rows, fields: ${JSON.stringify(results?.fields?.map((f: any) => f.name))}`);
     res.json(results);
