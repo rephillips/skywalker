@@ -6,8 +6,11 @@ const router = Router();
 
 // Get current config (masks sensitive fields)
 router.get("/config", (_req, res) => {
+  // Derive web URL from base URL if not set (replace port 8089 with 8000)
+  const webUrl = config.splunk.webUrl || config.splunk.baseUrl.replace(/:8089\b/, ":8000").replace(/^https/, "http");
   res.json({
     baseUrl: config.splunk.baseUrl,
+    webUrl,
     username: config.splunk.username,
     hasPassword: !!config.splunk.password,
     hasToken: !!config.splunk.token,

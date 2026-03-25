@@ -24,6 +24,14 @@ export const api = {
     return request<{ status: string; splunk: string }>("/health");
   },
 
+  config() {
+    return request<{ baseUrl: string; webUrl: string; username: string; hasPassword: boolean; hasToken: boolean; authMode: string }>("/config");
+  },
+
+  searchLog(sid: string) {
+    return request<any>(`/search/${encodeURIComponent(sid)}/log`);
+  },
+
   proxy(path: string, method = "GET", body?: string) {
     return request<{ status: string; data?: any; message?: string }>("/proxy", {
       method: "POST",

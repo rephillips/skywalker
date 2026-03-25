@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash, Rows3, Layers } from "lucide-react";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
+import { api } from "../../services/api";
 import { LoadingSpinner } from "../common/LoadingSpinner";
 import { ErrorAlert } from "../common/ErrorAlert";
 import { LineChartPanel } from "./LineChartPanel";
@@ -335,11 +336,9 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
         ) : null}
       </div>
 
-      {/* SID footer */}
+      {/* SID footer with job inspector + search.log links */}
       {sid && (
-        <div className="shrink-0 pt-1">
-          <span className="text-[10px] font-mono text-gray-600">SID: {sid}</span>
-        </div>
+        <SidFooter sid={sid} />
       )}
 
       {/* Bottom resize handle */}
@@ -365,6 +364,66 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
       >
         <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-surface-border group-hover:border-brand-400 transition-colors rounded-br-sm" />
       </div>
+    </div>
+  );
+}
+
+function SidFooter({ sid }: { sid: string }) {
+  const [showLog, setShowLog] = useState(false);
+  const [log, setLog] = useState<string | null>(null);
+  const [loadingLog, setLoadingLog] = useState(false);
+  const [webUrl, setWebUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.config().then((cfg) => setWebUrl(cfg.webUrl)).catch(() => {});
+  }, []);
+
+  async function fetchLog() {
+    if (log) { setShowLog(!showLog); return; }
+    setLoadingLog(true);
+    setShowLog(true);
+    try {
+      const data = await api.searchLog(sid);
+      setLog(data?.log || data?.entry?.[0]?.content || JSON.stringify(data, null, 2));
+    } catch (err) {
+      setLog(`Error fetching search.log: ${(err as Error).message}`);
+    } finally {
+      setLoadingLog(false);
+    }
+  }
+
+  const inspectorUrl = webUrl ? `${webUrl}/en-US/app/search/job_inspector?sid=${encodeURIComponent(sid)}` : null;
+
+  return (
+    <div className="shrink-0 pt-1">
+      <div className="flex items-center gap-2 text-[10px] font-mono text-gray-600">
+        <span>SID: {sid}</span>
+        {inspectorUrl && (
+          <a
+            href={inspectorUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-400 hover:text-brand-50 transition-colors"
+          >
+            Job Inspector
+          </a>
+        )}
+        <button
+          onClick={fetchLog}
+          className="text-brand-400 hover:text-brand-50 transition-colors"
+        >
+          {showLog ? "Hide" : "search.log"}
+        </button>
+      </div>
+      {showLog && (
+        <div className="mt-1 rounded-lg border border-surface-border bg-surface p-2 max-h-40 overflow-auto">
+          {loadingLog ? (
+            <span className="text-[10px] text-gray-500">Loading search.log...</span>
+          ) : (
+            <pre className="text-[10px] font-mono text-gray-400 whitespace-pre-wrap">{log}</pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

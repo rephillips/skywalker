@@ -9,6 +9,7 @@ export const config = {
   port: parseInt(process.env.PORT || "3001", 10),
   splunk: {
     baseUrl: process.env.SPLUNK_BASE_URL || "https://127.0.0.1:8089",
+    webUrl: process.env.SPLUNK_WEB_URL || "",
     username: process.env.SPLUNK_USERNAME || "admin",
     password: process.env.SPLUNK_PASSWORD || "changeme",
     token: process.env.SPLUNK_TOKEN || "",
