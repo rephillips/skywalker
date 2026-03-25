@@ -43,7 +43,6 @@ function SortablePanel({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    width: "100%",
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 50 : undefined,
   };

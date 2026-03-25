@@ -159,17 +159,17 @@ export function DashboardPanel({ config, onRemove, dragHandleProps }: Props) {
       {/* Right resize handle */}
       <div
         onMouseDown={onResizeXStart}
-        className="absolute top-4 right-0 bottom-4 w-2 cursor-ew-resize flex items-center justify-center group"
+        className="absolute top-0 right-0 bottom-0 w-3 cursor-ew-resize flex items-center justify-center group"
       >
-        <div className="h-16 w-1 rounded-full bg-surface-border group-hover:bg-gray-500 transition-colors" />
+        <div className="h-20 w-1.5 rounded-full bg-surface-border group-hover:bg-brand-400 transition-colors" />
       </div>
 
       {/* Corner resize handle */}
       <div
         onMouseDown={onResizeCornerStart}
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize group"
+        className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize group z-10"
       >
-        <div className="absolute bottom-1 right-1 w-2 h-2 border-b-2 border-r-2 border-surface-border group-hover:border-gray-500 transition-colors" />
+        <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-surface-border group-hover:border-brand-400 transition-colors rounded-br-sm" />
       </div>
     </div>
   );
