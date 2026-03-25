@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* Dark theme (default) */
+@theme {
+  --color-surface: #0f1117;
+  --color-surface-raised: #161922;
+  --color-surface-border: #2a2d37;
+  --color-surface-hover: #1e2130;
+  --color-brand-50: #eef2ff;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-900: #1e1b4b;
+}
+
+/* Light Sunset Surfing overrides */
+html.light {
+  --color-surface: #FCF5E2;
+  --color-surface-raised: #ffffff;
+  --color-surface-border: #e8dcc8;
+  --color-surface-hover: #f5edd6;
+  --color-brand-50: #fef0f0;
+  --color-brand-400: #FD5C5A;
+  --color-brand-500: #4CC2C0;
+  --color-brand-600: #3da8a6;
+  --color-brand-900: #2a7a79;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.light {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+}
+
+/* Light mode text overrides */
+html.light .text-gray-100 { color: #2d2a26; }
+html.light .text-gray-200 { color: #3d3a36; }
+html.light .text-gray-300 { color: #4d4a46; }
+html.light .text-gray-400 { color: #6d6a66; }
+html.light .text-gray-500 { color: #8d8a86; }
+html.light .text-gray-600 { color: #a0a0a0; }
+html.light .text-white { color: #1a1714; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #2a2d37;
+  border-radius: 3px;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3a3d47;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #d4c9b0;
+  border-radius: 3px;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #bfb49c;
+}
