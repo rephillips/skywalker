@@ -31,7 +31,13 @@ function detectChartType(spl: string): ChartType {
   return "line";
 }
 
-const CHART_COLORS = ["emerald", "cyan", "fuchsia", "yellow", "rose", "violet", "blue", "orange"];
+const COLOR_PALETTES = [
+  { name: "Neon", colors: ["emerald", "cyan", "fuchsia", "yellow", "rose", "violet"] },
+  { name: "Electric", colors: ["blue", "cyan", "emerald", "amber", "red", "violet"] },
+  { name: "Sunset", colors: ["red", "amber", "teal", "cyan", "orange", "purple"] },
+  { name: "Cyberpunk", colors: ["rose", "sky", "green", "orange", "violet", "cyan"] },
+  { name: "Pastel", colors: ["blue", "emerald", "rose", "yellow", "violet", "cyan"] },
+];
 
 export function SearchPage() {
   const [spl, setSpl] = useState("index=_internal | timechart span=1m count by host");
@@ -44,6 +50,7 @@ export function SearchPage() {
   const [history, setHistory] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("auto");
   const [chartType, setChartType] = useState<ChartType>("line");
+  const [paletteIndex, setPaletteIndex] = useState(0);
   const [showApiCall, setShowApiCall] = useState(false);
   const [lastSearchedSpl, setLastSearchedSpl] = useState("");
 
@@ -255,6 +262,26 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   ))}
                 </div>
               )}
+              {/* Color palette */}
+              {showChart && (
+                <div className="flex items-center gap-1 mr-2 border-r border-surface-border pr-2">
+                  {COLOR_PALETTES.map((p, i) => (
+                    <button
+                      key={p.name}
+                      onClick={() => setPaletteIndex(i)}
+                      className={clsx(
+                        "rounded-md px-2 py-1 text-[10px] font-medium transition-colors",
+                        paletteIndex === i
+                          ? "bg-brand-500/15 text-brand-400"
+                          : "text-gray-500 hover:text-gray-300"
+                      )}
+                      title={p.name}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
               {/* View mode */}
               {(["auto", "chart", "table"] as ViewMode[]).map((mode) => (
                 <button
@@ -286,7 +313,7 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   data={chartData}
                   index={chartIndex}
                   categories={chartCategories}
-                  colors={CHART_COLORS.slice(0, chartCategories.length)}
+                  colors={COLOR_PALETTES[paletteIndex].colors.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
                   showLegend
@@ -299,7 +326,7 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   data={chartData}
                   index={chartIndex}
                   categories={chartCategories}
-                  colors={CHART_COLORS.slice(0, chartCategories.length)}
+                  colors={COLOR_PALETTES[paletteIndex].colors.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
                   showLegend
@@ -312,7 +339,7 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   data={chartData}
                   index={chartIndex}
                   categories={chartCategories}
-                  colors={CHART_COLORS.slice(0, chartCategories.length)}
+                  colors={COLOR_PALETTES[paletteIndex].colors.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
                   showLegend
