@@ -40,10 +40,12 @@ function SortablePanel({
     isDragging,
   } = useSortable({ id: panel.id });
 
+  const span = Number(panel.span) || 4;
+  const widthPercent = (span / 4) * 100;
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    gridColumn: `span ${Number(panel.span) || 4} / span ${Number(panel.span) || 4}`,
+    width: `calc(${widthPercent}% - ${span < 4 ? "12px" : "0px"})`,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 50 : undefined,
   };
@@ -75,7 +77,7 @@ export function PanelGrid({ panels, onRemovePanel, onReorder, customPanelIds }: 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={panels.map((p) => p.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-4 gap-4 p-6">
+        <div className="flex flex-wrap gap-4 p-6">
           {panels.map((panel) => (
             <SortablePanel
               key={panel.id}
