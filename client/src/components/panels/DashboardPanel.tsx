@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
@@ -11,6 +11,7 @@ import { TablePanel } from "./TablePanel";
 
 interface Props {
   config: PanelConfig;
+  onRemove?: () => void;
 }
 
 const heightMap = {
@@ -19,7 +20,7 @@ const heightMap = {
   lg: "min-h-[400px]",
 };
 
-export function DashboardPanel({ config }: Props) {
+export function DashboardPanel({ config, onRemove }: Props) {
   const { data, loading, error, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
     latest: config.latest,
@@ -38,13 +39,24 @@ export function DashboardPanel({ config }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-300">{config.title}</h3>
-        <button
-          onClick={refetch}
-          className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
-          title="Refresh"
-        >
-          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={refetch}
+            className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+          {onRemove && (
+            <button
+              onClick={onRemove}
+              className="rounded-md p-1 text-gray-500 hover:text-red-400 hover:bg-surface-hover transition-colors"
+              title="Remove panel"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
