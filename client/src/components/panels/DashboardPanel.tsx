@@ -24,7 +24,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
   const [editEarliest, setEditEarliest] = useState(config.earliest || "-1h");
   const [editRefresh, setEditRefresh] = useState(config.refreshInterval || 0);
 
-  const { data, loading, error, refetch } = useSplunkSearch(config.spl, {
+  const { data, loading, error, sid, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
     latest: config.latest,
     refreshInterval: config.refreshInterval,
@@ -268,6 +268,13 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
           <p className="text-xs text-gray-500 py-4 text-center">No results returned</p>
         ) : null}
       </div>
+
+      {/* SID footer */}
+      {sid && (
+        <div className="shrink-0 pt-1">
+          <span className="text-[10px] font-mono text-gray-600">SID: {sid}</span>
+        </div>
+      )}
 
       {/* Bottom resize handle */}
       <div

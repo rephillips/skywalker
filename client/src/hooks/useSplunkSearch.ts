@@ -13,6 +13,7 @@ interface UseSplunkSearchResult {
   data: SplunkResult[] | null;
   loading: boolean;
   error: string | null;
+  sid: string | null;
   refetch: () => void;
 }
 
@@ -24,8 +25,8 @@ export function useSplunkSearch(
   const [data, setData] = useState<SplunkResult[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sid, setSid] = useState<string | null>(null);
 
-  // Use global time unless panel has its own time range set
   const earliest = options.earliest || globalTime.earliest;
   const latest = options.latest || globalTime.latest;
 
@@ -35,6 +36,7 @@ export function useSplunkSearch(
       setError(null);
       const response = await api.search(spl, earliest, latest);
       setData(response.results);
+      setSid(response.sid || null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -51,5 +53,5 @@ export function useSplunkSearch(
     }
   }, [execute, options.refreshInterval]);
 
-  return { data, loading, error, refetch: execute };
+  return { data, loading, error, sid, refetch: execute };
 }

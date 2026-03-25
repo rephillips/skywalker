@@ -7,4 +7,5 @@ export interface SplunkSearchResponse {
   fields?: { name: string }[];
   init_offset?: number;
   messages?: { type: string; text: string }[];
+  sid?: string;
 }
