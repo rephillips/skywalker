@@ -28,6 +28,10 @@ export interface PanelConfig {
   pixelHeight?: number;
   pixelWidth?: number;
   chartOptions?: ChartOptions;
+  statusIndicator?: {
+    spl: string;
+    thresholds: { green: number; yellow: number; orange: number };
+  };
 }
 
 export interface DashboardConfig {

@@ -11,6 +11,7 @@ import { KpiCard } from "./KpiCard";
 import { TablePanel } from "./TablePanel";
 import { SwimLanePanel } from "./SwimLanePanel";
 import { StatusDotsPanel } from "./StatusDotsPanel";
+import { StatusIndicator } from "./StatusIndicator";
 
 interface Props {
   config: PanelConfig;
@@ -28,6 +29,10 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
   const [editVizType, setEditVizType] = useState(config.vizType);
   const [editEarliest, setEditEarliest] = useState(config.earliest || "-1h");
   const [editRefresh, setEditRefresh] = useState(config.refreshInterval || 0);
+  const [editStatusSpl, setEditStatusSpl] = useState(config.statusIndicator?.spl || "");
+  const [editStatusGreen, setEditStatusGreen] = useState(config.statusIndicator?.thresholds.green ?? 100);
+  const [editStatusYellow, setEditStatusYellow] = useState(config.statusIndicator?.thresholds.yellow ?? 500);
+  const [editStatusOrange, setEditStatusOrange] = useState(config.statusIndicator?.thresholds.orange ?? 1000);
 
   const { data, loading, error, sid, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
@@ -121,6 +126,9 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
               <GripVertical size={14} />
             </div>
           )}
+          {!editing && config.statusIndicator && (
+            <StatusIndicator spl={config.statusIndicator.spl} thresholds={config.statusIndicator.thresholds} />
+          )}
           {editing ? (
             <input
               type="text"
@@ -145,6 +153,10 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                       vizType: editVizType,
                       earliest: editEarliest,
                       refreshInterval: editRefresh,
+                      statusIndicator: editStatusSpl ? {
+                        spl: editStatusSpl,
+                        thresholds: { green: editStatusGreen, yellow: editStatusYellow, orange: editStatusOrange },
+                      } : undefined,
                     });
                   }
                   setEditing(false);
@@ -161,6 +173,10 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                   setEditVizType(config.vizType);
                   setEditEarliest(config.earliest || "-1h");
                   setEditRefresh(config.refreshInterval || 0);
+                  setEditStatusSpl(config.statusIndicator?.spl || "");
+                  setEditStatusGreen(config.statusIndicator?.thresholds.green ?? 100);
+                  setEditStatusYellow(config.statusIndicator?.thresholds.yellow ?? 500);
+                  setEditStatusOrange(config.statusIndicator?.thresholds.orange ?? 1000);
                   setEditing(false);
                 }}
                 className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
@@ -262,6 +278,26 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
               />
               <span className="text-[10px] text-gray-600">sec</span>
             </div>
+          </div>
+          {/* Status indicator config */}
+          <div className="flex items-center gap-2 pt-1 border-t border-surface-border/50">
+            <span className="text-[10px] text-gray-500 shrink-0">Status dot:</span>
+            <input
+              value={editStatusSpl}
+              onChange={(e) => setEditStatusSpl(e.target.value)}
+              className="flex-1 rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[10px] font-mono text-gray-300 outline-none"
+              placeholder="SPL for status (leave blank to disable)"
+            />
+            {editStatusSpl && (
+              <>
+                <span className="text-[10px] text-emerald-400">G≤</span>
+                <input type="number" value={editStatusGreen} onChange={(e) => setEditStatusGreen(Number(e.target.value))} className="w-10 rounded border border-surface-border bg-surface px-1 py-0.5 text-[10px] text-gray-300 outline-none" />
+                <span className="text-[10px] text-yellow-400">Y≤</span>
+                <input type="number" value={editStatusYellow} onChange={(e) => setEditStatusYellow(Number(e.target.value))} className="w-10 rounded border border-surface-border bg-surface px-1 py-0.5 text-[10px] text-gray-300 outline-none" />
+                <span className="text-[10px] text-orange-400">O≤</span>
+                <input type="number" value={editStatusOrange} onChange={(e) => setEditStatusOrange(Number(e.target.value))} className="w-10 rounded border border-surface-border bg-surface px-1 py-0.5 text-[10px] text-gray-300 outline-none" />
+              </>
+            )}
           </div>
         </div>
       )}
