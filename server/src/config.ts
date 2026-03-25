@@ -24,6 +24,6 @@ export function updateSplunkConfig(updates: {
 }) {
   if (updates.baseUrl) config.splunk.baseUrl = updates.baseUrl;
   if (updates.username) config.splunk.username = updates.username;
-  if (updates.password !== undefined) config.splunk.password = updates.password;
-  if (updates.token !== undefined) config.splunk.token = updates.token;
+  if (updates.password) config.splunk.password = updates.password;
+  if (updates.token) config.splunk.token = updates.token;
 }
