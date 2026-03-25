@@ -19,7 +19,12 @@ export function BarChartPanel({ config, data, chartHeight = 300 }: Props) {
   );
 
   const chartData = data.map((row) => {
-    const point: Record<string, string | number> = { [index]: row[index] };
+    let indexVal: string | number = row[index];
+    if (index === "_time" && typeof indexVal === "string") {
+      const d = new Date(indexVal);
+      indexVal = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    const point: Record<string, string | number> = { [index]: indexVal };
     categories.forEach((cat) => {
       point[cat] = Number(row[cat]) || 0;
     });

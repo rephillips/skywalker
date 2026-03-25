@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { RefreshCw, Trash2, GripVertical, Pencil, Check, X } from "lucide-react";
+import { RefreshCw, Trash2, GripVertical, Pencil, Check, X, LineChart as LineIcon, BarChart3, AreaChart as AreaIcon, Table2, Hash } from "lucide-react";
 import type { PanelConfig } from "../../types/dashboard";
 import { useSplunkSearch } from "../../hooks/useSplunkSearch";
 import { LoadingSpinner } from "../common/LoadingSpinner";
@@ -20,6 +20,9 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
   const [editing, setEditing] = useState(false);
   const [editSpl, setEditSpl] = useState(config.spl);
   const [editTitle, setEditTitle] = useState(config.title);
+  const [editVizType, setEditVizType] = useState(config.vizType);
+  const [editEarliest, setEditEarliest] = useState(config.earliest || "-1h");
+  const [editRefresh, setEditRefresh] = useState(config.refreshInterval || 0);
 
   const { data, loading, error, refetch } = useSplunkSearch(config.spl, {
     earliest: config.earliest,
@@ -124,7 +127,13 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
               <button
                 onClick={() => {
                   if (onUpdate) {
-                    onUpdate({ spl: editSpl, title: editTitle });
+                    onUpdate({
+                      spl: editSpl,
+                      title: editTitle,
+                      vizType: editVizType,
+                      earliest: editEarliest,
+                      refreshInterval: editRefresh,
+                    });
                   }
                   setEditing(false);
                 }}
@@ -137,6 +146,9 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
                 onClick={() => {
                   setEditSpl(config.spl);
                   setEditTitle(config.title);
+                  setEditVizType(config.vizType);
+                  setEditEarliest(config.earliest || "-1h");
+                  setEditRefresh(config.refreshInterval || 0);
                   setEditing(false);
                 }}
                 className="rounded-md p-1 text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
@@ -177,17 +189,70 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
         </div>
       </div>
 
-      {/* Edit SPL */}
+      {/* Edit panel */}
       {editing && (
-        <div className="mb-2 shrink-0">
+        <div className="mb-2 shrink-0 flex flex-col gap-2">
           <textarea
             value={editSpl}
             onChange={(e) => setEditSpl(e.target.value)}
-            rows={3}
+            rows={2}
             className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-gray-100 font-mono outline-none focus:border-brand-500 resize-none"
             spellCheck={false}
             placeholder="index=_internal | timechart span=1m count by host"
           />
+          <div className="flex items-center gap-3">
+            {/* Viz type */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-500 mr-1">Chart:</span>
+              {([
+                { type: "line", icon: LineIcon },
+                { type: "area", icon: AreaIcon },
+                { type: "bar", icon: BarChart3 },
+                { type: "table", icon: Table2 },
+                { type: "kpi", icon: Hash },
+              ] as const).map(({ type, icon: Icon }) => (
+                <button
+                  key={type}
+                  onClick={() => setEditVizType(type)}
+                  className={`rounded p-1 transition-colors ${
+                    editVizType === type
+                      ? "bg-brand-500/15 text-brand-400"
+                      : "text-gray-500 hover:text-gray-300"
+                  }`}
+                  title={type}
+                >
+                  <Icon size={14} />
+                </button>
+              ))}
+            </div>
+            {/* Time range */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-500">Time:</span>
+              <select
+                value={editEarliest}
+                onChange={(e) => setEditEarliest(e.target.value)}
+                className="rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[10px] text-gray-300 outline-none"
+              >
+                <option value="-15m">15m</option>
+                <option value="-1h">1h</option>
+                <option value="-4h">4h</option>
+                <option value="-24h">24h</option>
+                <option value="-7d">7d</option>
+              </select>
+            </div>
+            {/* Refresh */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-gray-500">Refresh:</span>
+              <input
+                type="number"
+                value={editRefresh}
+                onChange={(e) => setEditRefresh(Number(e.target.value))}
+                min={0}
+                className="w-12 rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[10px] text-gray-300 outline-none"
+              />
+              <span className="text-[10px] text-gray-600">sec</span>
+            </div>
+          </div>
         </div>
       )}
 
