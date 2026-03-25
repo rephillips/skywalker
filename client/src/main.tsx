@@ -8,6 +8,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { DocsPage } from "./pages/DocsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { SystemInfoPage } from "./pages/SystemInfoPage";
+import { KnowledgeBundlePage } from "./pages/KnowledgeBundlePage";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
       { path: "docs", element: <DocsPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "system-info", element: <SystemInfoPage /> },
+      { path: "knowledge", element: <KnowledgeBundlePage /> },
       { path: "monitoring/:section", element: <PlaceholderPage /> },
       { path: "security", element: <PlaceholderPage /> },
     ],
