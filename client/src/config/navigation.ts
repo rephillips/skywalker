@@ -7,6 +7,7 @@ import {
   Shield,
   Settings,
   BookOpen,
+  MonitorCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,6 +29,7 @@ export const navigation: NavItem[] = [
       { label: "Applications", icon: AppWindow, path: "/monitoring/apps" },
     ],
   },
+  { label: "System Info", icon: MonitorCog, path: "/system-info" },
   { label: "Security", icon: Shield, path: "/security" },
   { label: "API Docs", icon: BookOpen, path: "/docs" },
   { label: "Settings", icon: Settings, path: "/settings" },
