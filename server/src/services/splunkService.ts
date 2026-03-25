@@ -36,8 +36,9 @@ export async function createSearchJob(
   earliest?: string,
   latest?: string
 ): Promise<string> {
+  const normalizedSpl = /^\s*(search|tstats|\|)/.test(spl) ? spl : `search ${spl}`;
   const body = new URLSearchParams();
-  body.set("search", spl);
+  body.set("search", normalizedSpl);
   body.set("output_mode", "json");
   if (earliest) body.set("earliest_time", earliest);
   if (latest) body.set("latest_time", latest);
