@@ -75,6 +75,17 @@ export const defaultDashboard: DashboardConfig = {
       height: "md",
     },
     {
+      id: "events-by-host",
+      title: "Events by Host",
+      spl: "search index=_internal | timechart span=1m count by host",
+      vizType: "line",
+      earliest: "-1h",
+      latest: "now",
+      refreshInterval: 30,
+      span: 4,
+      height: "md",
+    },
+    {
       id: "recent-events",
       title: "Recent Events",
       spl: "search index=_internal | head 20 | table _time source log_level message",
