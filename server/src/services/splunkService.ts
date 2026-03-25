@@ -1,7 +1,9 @@
-import https from "node:https";
+import { Agent } from "undici";
 import { config } from "../config.js";
 
-const agent = new https.Agent({ rejectUnauthorized: false });
+const tlsAgent = new Agent({
+  connect: { rejectUnauthorized: false },
+});
 
 function authHeader(): string {
   if (config.splunk.token) {
@@ -15,8 +17,8 @@ export async function splunkFetch(path: string, options?: RequestInit): Promise<
   const url = `${config.splunk.baseUrl}${path}`;
   const res = await fetch(url, {
     ...options,
-    // @ts-expect-error Node fetch supports agent via dispatcher
-    dispatcher: agent,
+    // @ts-expect-error undici dispatcher for TLS bypass
+    dispatcher: tlsAgent,
     headers: {
       Authorization: authHeader(),
       ...options?.headers,
