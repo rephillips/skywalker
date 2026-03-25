@@ -64,7 +64,7 @@ export function AddPanelModal({ onAdd, onClose }: Props) {
   const [spl, setSpl] = useState("index=_internal | timechart span=1m count by host");
   const [vizType, setVizType] = useState<VizType>("line");
   const [earliest, setEarliest] = useState("-1h");
-  const [refreshInterval, setRefreshInterval] = useState(30);
+  const [refreshInterval, setRefreshInterval] = useState(0);
   const [span, setSpan] = useState(4);
   const [paletteIndex, setPaletteIndex] = useState(0);
 
