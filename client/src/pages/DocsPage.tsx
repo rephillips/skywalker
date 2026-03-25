@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Search, Code } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Search, Code, Play, Loader2, Send } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { apiCategories, apiConventions, type Endpoint } from "../config/apiReference";
+import { api } from "../services/api";
 
 const METHOD_COLORS: Record<string, string> = {
   GET: "bg-emerald-500/15 text-emerald-400",
@@ -10,9 +11,120 @@ const METHOD_COLORS: Record<string, string> = {
   DELETE: "bg-red-500/15 text-red-400",
 };
 
-function EndpointRow({ ep }: { ep: Endpoint }) {
+// ─── API Test Runner ──────────────────────────────────────────────
+function ApiTestRunner() {
+  const [path, setPath] = useState("server/info");
+  const [method, setMethod] = useState("GET");
+  const [body, setBody] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState<number | null>(null);
+
+  async function runTest() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    const start = Date.now();
+    try {
+      const res = await api.proxy(path, method, method === "POST" ? body : undefined);
+      setElapsed(Date.now() - start);
+      if (res.status === "ok") {
+        setResult(JSON.stringify(res.data, null, 2));
+      } else {
+        setError(res.message || "Unknown error");
+      }
+    } catch (err) {
+      setElapsed(Date.now() - start);
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface-raised p-5 mb-6">
+      <h3 className="text-sm font-semibold text-white mb-3">
+        Test Endpoint
+      </h3>
+      <p className="text-xs text-gray-500 mb-3">
+        Runs against your configured Splunk instance using your token/credentials.
+      </p>
+      <div className="flex gap-2 mb-2">
+        <select
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          className={clsx(
+            "rounded-lg border border-surface-border px-2.5 py-2 text-xs font-mono font-bold outline-none focus:border-brand-500 w-20",
+            method === "GET" ? "bg-emerald-500/10 text-emerald-400" :
+            method === "POST" ? "bg-blue-500/10 text-blue-400" :
+            "bg-red-500/10 text-red-400"
+          )}
+        >
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+        <div className="flex-1 flex items-center rounded-lg border border-surface-border bg-surface overflow-hidden">
+          <span className="px-2.5 text-xs text-gray-500 font-mono shrink-0">/services/</span>
+          <input
+            type="text"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && runTest()}
+            className="flex-1 bg-transparent py-2 pr-3 text-sm text-gray-100 font-mono outline-none"
+            placeholder="server/info"
+          />
+        </div>
+        <button
+          onClick={runTest}
+          disabled={loading || !path.trim()}
+          className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          Run
+        </button>
+      </div>
+      {method === "POST" && (
+        <div className="mb-2">
+          <input
+            type="text"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
+            placeholder="key=value&key2=value2 (URL-encoded form body)"
+          />
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400 mb-2">
+          {error}
+        </div>
+      )}
+      {result && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+              Response
+            </span>
+            {elapsed !== null && (
+              <span className="text-[10px] text-gray-500">{elapsed}ms</span>
+            )}
+          </div>
+          <pre className="rounded-lg bg-surface border border-surface-border p-3 text-xs font-mono text-blue-400/80 whitespace-pre-wrap break-all max-h-64 overflow-auto leading-relaxed">
+            {result}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Endpoint Row ─────────────────────────────────────────────────
+function EndpointRow({ ep, onTryIt }: { ep: Endpoint; onTryIt: (path: string, method: string) => void }) {
   const [open, setOpen] = useState(false);
   const hasExample = !!ep.example;
+  const firstMethod = ep.methods.split(", ")[0];
 
   return (
     <>
@@ -58,6 +170,20 @@ function EndpointRow({ ep }: { ep: Endpoint }) {
         <td className="px-3 py-2 text-xs text-gray-500">
           <div className="flex items-center gap-2">
             <span className="flex-1">{ep.description}</span>
+            {/* Try it button */}
+            {!ep.path.includes("{") && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTryIt(ep.path, firstMethod);
+                }}
+                className="shrink-0 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-brand-400 hover:bg-brand-500/10 transition-colors"
+                title="Try this endpoint"
+              >
+                <Send size={10} />
+                Try
+              </button>
+            )}
             {hasExample && (
               <Code size={12} className="shrink-0 text-brand-400 opacity-60" />
             )}
@@ -102,11 +228,14 @@ function EndpointRow({ ep }: { ep: Endpoint }) {
   );
 }
 
+// ─── Docs Page ────────────────────────────────────────────────────
 export function DocsPage() {
   const [search, setSearch] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(apiCategories.map((c) => c.id))
   );
+  const [testPath, setTestPath] = useState("server/info");
+  const [testMethod, setTestMethod] = useState("GET");
 
   const toggleCategory = (id: string) => {
     setExpandedCategories((prev) => {
@@ -116,6 +245,12 @@ export function DocsPage() {
       return next;
     });
   };
+
+  function handleTryIt(path: string, method: string) {
+    setTestPath(path);
+    setTestMethod(method);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const lowerSearch = search.toLowerCase();
 
@@ -167,6 +302,9 @@ export function DocsPage() {
               </a>
             </p>
           </div>
+
+          {/* Test Runner */}
+          <ApiTestRunner key={`${testPath}-${testMethod}`} />
 
           {/* Search filter */}
           <div className="relative mb-6">
@@ -309,7 +447,7 @@ export function DocsPage() {
                           <table className="w-full text-sm mb-2">
                             <tbody>
                               {sub.endpoints.map((ep) => (
-                                <EndpointRow key={ep.path} ep={ep} />
+                                <EndpointRow key={ep.path} ep={ep} onTryIt={handleTryIt} />
                               ))}
                             </tbody>
                           </table>

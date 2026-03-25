@@ -44,4 +44,28 @@ router.post("/config/test", async (_req, res) => {
   }
 });
 
+// Proxy any Splunk REST endpoint for testing from the Docs page
+router.post("/proxy", async (req, res) => {
+  try {
+    const { path, method, body } = req.body;
+    if (!path) {
+      res.status(400).json({ error: "path is required" });
+      return;
+    }
+    const separator = path.includes("?") ? "&" : "?";
+    const url = `/services/${path}${separator}output_mode=json`;
+
+    const options: RequestInit = { method: method || "GET" };
+    if (body && method === "POST") {
+      options.body = body;
+      options.headers = { "Content-Type": "application/x-www-form-urlencoded" };
+    }
+
+    const data = await splunkFetch(url, options);
+    res.json({ status: "ok", data });
+  } catch (err) {
+    res.json({ status: "error", message: (err as Error).message });
+  }
+});
+
 export default router;

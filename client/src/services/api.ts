@@ -23,4 +23,12 @@ export const api = {
   health() {
     return request<{ status: string; splunk: string }>("/health");
   },
+
+  proxy(path: string, method = "GET", body?: string) {
+    return request<{ status: string; data?: any; message?: string }>("/proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, method, body }),
+    });
+  },
 };
