@@ -74,9 +74,20 @@ export async function getJobResults(
   count = 1000,
   offset = 0
 ): Promise<any> {
-  return splunkFetch(
+  const data = await splunkFetch(
     `/services/search/v2/jobs/${encodeURIComponent(sid)}/results?output_mode=json&count=${count}&offset=${offset}`
   );
+
+  // Log the fields we got back for debugging
+  if (data?.results?.length > 0) {
+    const fields = Object.keys(data.results[0]);
+    console.log(`[Results] sid=${sid} rows=${data.results.length} fields=${JSON.stringify(fields)}`);
+    console.log(`[Results] sample: ${JSON.stringify(data.results[0])}`);
+  } else {
+    console.log(`[Results] sid=${sid} empty results, fields from response: ${JSON.stringify(data?.fields?.map((f: any) => f.name))}`);
+  }
+
+  return data;
 }
 
 export async function executeSearch(
@@ -90,8 +101,9 @@ export async function executeSearch(
 
   while (Date.now() - start < timeoutMs) {
     const status = await getJobStatus(sid);
+    console.log(`[Poll] sid=${sid} state=${status.dispatchState} progress=${status.doneProgress} resultCount=${status.resultCount}`);
     if (status.dispatchState === "DONE") {
-      return getJobResults(sid);
+      return getJobResults(sid, 1000);
     }
     if (status.dispatchState === "FAILED") {
       throw new Error(`Search job ${sid} failed`);
