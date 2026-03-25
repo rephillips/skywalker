@@ -60,60 +60,92 @@ export function OverlayChartPanel({ config, data, chartHeight = 300, onUpdate }:
     });
   }, [overlays.map((o) => o.spl).join("|"), earliest, latest]);
 
+  // Normalize ISO timestamp to minute-level key for merging
+  function normalizeTime(t: string): string {
+    try {
+      const d = new Date(t);
+      // Round to nearest minute for reliable matching
+      d.setSeconds(0, 0);
+      return d.toISOString();
+    } catch {
+      return t;
+    }
+  }
+
+  function formatTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return iso;
+    }
+  }
+
   // Merge primary data with overlay data into one chart dataset
   const { chartData, categories } = useMemo(() => {
     const index = "_time";
-
-    // Build time index from primary data
     const timeMap = new Map<string, Record<string, string | number>>();
 
-    // Add primary data
+    // Collect all category names first
     const primaryKeys = data.length > 0
       ? Object.keys(data[0]).filter((k) => k !== index && !k.startsWith("_"))
       : [];
 
+    const overlayCategories: string[] = [];
+    overlayData.forEach((od) => {
+      if (od.results.length === 0) return;
+      Object.keys(od.results[0])
+        .filter((k) => k !== index && !k.startsWith("_"))
+        .forEach((k) => {
+          const label = od.label ? `${od.label}: ${k}` : k;
+          if (!overlayCategories.includes(label)) overlayCategories.push(label);
+        });
+    });
+
+    const allCategories = [...primaryKeys, ...overlayCategories];
+
+    // Add primary data
     data.forEach((row) => {
-      let t = row[index];
-      if (typeof t === "string") {
-        const d = new Date(t);
-        t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      }
-      const point: Record<string, string | number> = { [index]: t };
+      const key = normalizeTime(row[index]);
+      const point: Record<string, string | number> = { [index]: key };
+      allCategories.forEach((c) => { point[c] = 0; });
       primaryKeys.forEach((k) => { point[k] = Number(row[k]) || 0; });
-      timeMap.set(t, point);
+      timeMap.set(key, point);
     });
 
     // Merge overlay data
-    const overlayCategories: string[] = [];
     overlayData.forEach((od) => {
       if (od.results.length === 0) return;
       const oKeys = Object.keys(od.results[0]).filter((k) => k !== index && !k.startsWith("_"));
 
       od.results.forEach((row) => {
-        let t = row[index];
-        if (typeof t === "string") {
-          const d = new Date(t);
-          t = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        }
-        const existing = timeMap.get(t) || { [index]: t };
+        const key = normalizeTime(row[index]);
+        const existing = timeMap.get(key) || (() => {
+          const point: Record<string, string | number> = { [index]: key };
+          allCategories.forEach((c) => { point[c] = 0; });
+          return point;
+        })();
         oKeys.forEach((k) => {
-          const label = od.label ? `${od.label}:${k}` : k;
+          const label = od.label ? `${od.label}: ${k}` : k;
           existing[label] = Number(row[k]) || 0;
-          if (!overlayCategories.includes(label)) overlayCategories.push(label);
         });
-        timeMap.set(t, existing);
+        timeMap.set(key, existing);
       });
     });
 
-    const allCategories = [...primaryKeys, ...overlayCategories];
-    const sorted = Array.from(timeMap.values()).sort((a, b) =>
-      String(a[index]).localeCompare(String(b[index]))
-    );
+    // Sort by time and format display labels
+    const sorted = Array.from(timeMap.values())
+      .sort((a, b) => String(a[index]).localeCompare(String(b[index])))
+      .map((point) => ({
+        ...point,
+        [index]: formatTime(String(point[index])),
+      }));
 
     return { chartData: sorted, categories: allCategories };
   }, [data, overlayData]);
 
   const anyLoading = overlayData.some((o) => o.loading);
+
+  console.log("[Overlay] categories:", categories, "rows:", chartData.length, "overlays:", overlayData.map((o) => `${o.label}: ${o.results.length} rows`));
 
   function addOverlay() {
     if (!newSpl.trim() || !onUpdate) return;
