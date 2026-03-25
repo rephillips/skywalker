@@ -1,3 +1,4 @@
+import { useRef, useState, useEffect } from "react";
 import { LineChart } from "@tremor/react";
 import type { PanelConfig } from "../../types/dashboard";
 import type { SplunkResult } from "../../types/splunk";
@@ -17,6 +18,16 @@ export function LineChartPanel({ config, data }: Props) {
     (k) => k !== index && !k.startsWith("_")
   );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartHeight, setChartHeight] = useState(250);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const h = containerRef.current.offsetHeight;
+      if (h > 50) setChartHeight(h);
+    }
+  });
+
   const chartData = data.map((row) => {
     const point: Record<string, string | number> = { [index]: row[index] };
     categories.forEach((cat) => {
@@ -24,9 +35,6 @@ export function LineChartPanel({ config, data }: Props) {
     });
     return point;
   });
-
-  // Debug: always show what we're working with
-  console.log("[LineChart] categories:", categories, "index:", index, "rows:", chartData.length, "sample:", chartData[0]);
 
   if (categories.length === 0) {
     return (
@@ -40,7 +48,7 @@ export function LineChartPanel({ config, data }: Props) {
   }
 
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 200 }}>
+    <div ref={containerRef} style={{ width: "100%", height: "100%" }}>
       <LineChart
         data={chartData}
         index={index}
@@ -49,7 +57,7 @@ export function LineChartPanel({ config, data }: Props) {
         yAxisWidth={48}
         showAnimation
         showLegend
-        className="h-full w-full"
+        style={{ height: chartHeight }}
       />
     </div>
   );

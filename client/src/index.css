@@ -1,5 +1,68 @@
 @import "tailwindcss";
-@source "../node_modules/@tremor/react/dist/**/*.js";
+@source "../node_modules/@tremor/react/**/*.{js,ts,jsx,tsx}";
+
+/* Tremor requires these SVG stroke/fill utilities for chart colors.
+   Tailwind v4 may not generate them from @source alone. */
+.stroke-emerald-500 { stroke: oklch(0.761 0.176 163.223); }
+.stroke-cyan-500 { stroke: oklch(0.715 0.143 215.221); }
+.stroke-fuchsia-500 { stroke: oklch(0.667 0.295 322.15); }
+.stroke-yellow-500 { stroke: oklch(0.795 0.184 86.047); }
+.stroke-rose-500 { stroke: oklch(0.645 0.246 16.439); }
+.stroke-violet-500 { stroke: oklch(0.606 0.25 292.717); }
+.stroke-blue-500 { stroke: oklch(0.623 0.214 259.815); }
+.stroke-indigo-500 { stroke: oklch(0.585 0.233 277.117); }
+.stroke-amber-500 { stroke: oklch(0.769 0.188 70.08); }
+.stroke-green-500 { stroke: oklch(0.723 0.219 149.579); }
+.stroke-red-500 { stroke: oklch(0.637 0.237 25.331); }
+.stroke-teal-500 { stroke: oklch(0.704 0.14 182.503); }
+.stroke-orange-500 { stroke: oklch(0.702 0.183 55.934); }
+.stroke-pink-500 { stroke: oklch(0.656 0.241 354.308); }
+.stroke-purple-500 { stroke: oklch(0.627 0.265 303.9); }
+.stroke-sky-500 { stroke: oklch(0.685 0.169 237.323); }
+.stroke-lime-500 { stroke: oklch(0.768 0.233 130.85); }
+
+.fill-emerald-500 { fill: oklch(0.761 0.176 163.223); }
+.fill-cyan-500 { fill: oklch(0.715 0.143 215.221); }
+.fill-fuchsia-500 { fill: oklch(0.667 0.295 322.15); }
+.fill-yellow-500 { fill: oklch(0.795 0.184 86.047); }
+.fill-rose-500 { fill: oklch(0.645 0.246 16.439); }
+.fill-violet-500 { fill: oklch(0.606 0.25 292.717); }
+.fill-blue-500 { fill: oklch(0.623 0.214 259.815); }
+.fill-indigo-500 { fill: oklch(0.585 0.233 277.117); }
+.fill-amber-500 { fill: oklch(0.769 0.188 70.08); }
+.fill-green-500 { fill: oklch(0.723 0.219 149.579); }
+.fill-red-500 { fill: oklch(0.637 0.237 25.331); }
+.fill-teal-500 { fill: oklch(0.704 0.14 182.503); }
+.fill-orange-500 { fill: oklch(0.702 0.183 55.934); }
+.fill-pink-500 { fill: oklch(0.656 0.241 354.308); }
+.fill-purple-500 { fill: oklch(0.627 0.265 303.9); }
+.fill-sky-500 { fill: oklch(0.685 0.169 237.323); }
+.fill-lime-500 { fill: oklch(0.768 0.233 130.85); }
+
+/* Tremor also needs these text and bg color classes */
+.text-emerald-500 { color: oklch(0.761 0.176 163.223); }
+.text-cyan-500 { color: oklch(0.715 0.143 215.221); }
+.text-fuchsia-500 { color: oklch(0.667 0.295 322.15); }
+.text-yellow-500 { color: oklch(0.795 0.184 86.047); }
+.text-rose-500 { color: oklch(0.645 0.246 16.439); }
+.text-violet-500 { color: oklch(0.606 0.25 292.717); }
+.bg-emerald-500 { background-color: oklch(0.761 0.176 163.223); }
+.bg-cyan-500 { background-color: oklch(0.715 0.143 215.221); }
+.bg-fuchsia-500 { background-color: oklch(0.667 0.295 322.15); }
+.bg-yellow-500 { background-color: oklch(0.795 0.184 86.047); }
+.bg-rose-500 { background-color: oklch(0.645 0.246 16.439); }
+.bg-violet-500 { background-color: oklch(0.606 0.25 292.717); }
+
+/* Tremor CSS custom properties for chart rendering */
+.stroke-tremor-border-default { stroke: #2a2d37; }
+.stroke-tremor-background-default { stroke: #0f1117; }
+.fill-tremor-brand-default { fill: #6366f1; }
+.fill-tremor-content-default { fill: #9ca3af; }
+.fill-tremor-content-emphasis { fill: #e5e7eb; }
+.text-tremor-label { font-size: 0.75rem; }
+.text-tremor-default { font-size: 0.875rem; }
+.text-tremor-content-default { color: #9ca3af; }
+.text-tremor-content-emphasis { color: #e5e7eb; }
 
 /* Dark theme (default) */
 @theme {
