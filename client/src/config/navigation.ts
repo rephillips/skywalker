@@ -9,6 +9,7 @@ import {
   BookOpen,
   MonitorCog,
   Package,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ export const navigation: NavItem[] = [
   { label: "System Info", icon: MonitorCog, path: "/system-info" },
   { label: "Knowledge", icon: Package, path: "/knowledge" },
   { label: "Security", icon: Shield, path: "/security" },
+  { label: "Conf Files", icon: FileText, path: "/conf-reference" },
   { label: "API Docs", icon: BookOpen, path: "/docs" },
   { label: "Settings", icon: Settings, path: "/settings" },
 ];
