@@ -13,7 +13,9 @@ export function BarChartPanel({ config, data }: Props) {
   const opts = config.chartOptions;
   const index = opts?.index || "_time";
   const allKeys = data.length > 0 ? Object.keys(data[0]) : [];
-  const categories = opts?.categories || allKeys.filter((k) => k !== index && k !== "_span" && k !== "_spandays");
+  const categories = opts?.categories || allKeys.filter(
+    (k) => k !== index && !k.startsWith("_")
+  );
 
   const chartData = data.map((row) => {
     const point: Record<string, string | number> = { [index]: row[index] };

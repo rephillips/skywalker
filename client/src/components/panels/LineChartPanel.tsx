@@ -13,7 +13,20 @@ export function LineChartPanel({ config, data }: Props) {
   const opts = config.chartOptions;
   const index = opts?.index || "_time";
   const allKeys = data.length > 0 ? Object.keys(data[0]) : [];
-  const categories = opts?.categories || allKeys.filter((k) => k !== index && k !== "_span" && k !== "_spandays");
+  const categories = opts?.categories || allKeys.filter(
+    (k) => k !== index && !k.startsWith("_")
+  );
+
+  if (categories.length === 0) {
+    return (
+      <div className="text-xs text-gray-500 py-4">
+        <p>No chart categories found. Fields: {allKeys.join(", ")}</p>
+        <p className="mt-1 font-mono text-[10px] text-gray-600">
+          Sample: {JSON.stringify(data[0]).slice(0, 200)}
+        </p>
+      </div>
+    );
+  }
 
   const chartData = data.map((row) => {
     const point: Record<string, string | number> = { [index]: row[index] };
