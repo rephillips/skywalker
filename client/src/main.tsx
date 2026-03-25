@@ -6,6 +6,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { DocsPage } from "./pages/DocsPage";
+import { PlaceholderPage } from "./pages/PlaceholderPage";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -17,8 +18,8 @@ const router = createBrowserRouter([
       { path: "search", element: <SearchPage /> },
       { path: "docs", element: <DocsPage /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "monitoring/:section", element: <DashboardPage /> },
-      { path: "security", element: <DashboardPage /> },
+      { path: "monitoring/:section", element: <PlaceholderPage /> },
+      { path: "security", element: <PlaceholderPage /> },
     ],
   },
 ]);
