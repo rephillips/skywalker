@@ -17,17 +17,6 @@ export function LineChartPanel({ config, data }: Props) {
     (k) => k !== index && !k.startsWith("_")
   );
 
-  if (categories.length === 0) {
-    return (
-      <div className="text-xs text-gray-500 py-4">
-        <p>No chart categories found. Fields: {allKeys.join(", ")}</p>
-        <p className="mt-1 font-mono text-[10px] text-gray-600">
-          Sample: {JSON.stringify(data[0]).slice(0, 200)}
-        </p>
-      </div>
-    );
-  }
-
   const chartData = data.map((row) => {
     const point: Record<string, string | number> = { [index]: row[index] };
     categories.forEach((cat) => {
@@ -36,8 +25,22 @@ export function LineChartPanel({ config, data }: Props) {
     return point;
   });
 
+  // Debug: always show what we're working with
+  console.log("[LineChart] categories:", categories, "index:", index, "rows:", chartData.length, "sample:", chartData[0]);
+
+  if (categories.length === 0) {
+    return (
+      <div className="text-xs text-gray-500 py-4">
+        <p>No chart categories found. Fields: {allKeys.join(", ")}</p>
+        <p className="mt-1 font-mono text-[10px] text-gray-600">
+          Sample: {JSON.stringify(data[0]).slice(0, 300)}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full">
+    <div style={{ width: "100%", height: "100%", minHeight: 200 }}>
       <LineChart
         data={chartData}
         index={index}
@@ -46,8 +49,7 @@ export function LineChartPanel({ config, data }: Props) {
         yAxisWidth={48}
         showAnimation
         showLegend
-        legendPosition="right"
-        className="h-full"
+        className="h-full w-full"
       />
     </div>
   );

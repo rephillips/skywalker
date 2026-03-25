@@ -13,17 +13,4 @@ export default defineConfig({
       },
     },
   },
-  optimizeDeps: {
-    include: [
-      "@splunk/visualizations/Line",
-      "@splunk/visualizations/Bar",
-      "@splunk/visualizations/Area",
-      "@splunk/themes",
-      "@splunk/visualization-context",
-      "styled-components",
-    ],
-  },
-  ssr: {
-    noExternal: ["@splunk/*"],
-  },
 });
