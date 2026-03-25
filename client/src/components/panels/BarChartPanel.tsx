@@ -7,6 +7,8 @@ interface Props {
   data: SplunkResult[];
 }
 
+const NEON_COLORS = ["emerald", "cyan", "fuchsia", "yellow", "rose", "violet"];
+
 export function BarChartPanel({ config, data }: Props) {
   const opts = config.chartOptions;
   const index = opts?.index || "_time";
@@ -26,9 +28,11 @@ export function BarChartPanel({ config, data }: Props) {
       data={chartData}
       index={index}
       categories={categories}
-      colors={opts?.colors || ["indigo", "cyan", "emerald", "amber"]}
+      colors={NEON_COLORS.slice(0, categories.length)}
       yAxisWidth={48}
       showAnimation
+      showLegend
+      legendPosition="right"
       className="h-full"
     />
   );

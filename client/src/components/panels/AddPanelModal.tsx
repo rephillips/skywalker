@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X } from "lucide-react";
+import clsx from "clsx";
 import type { PanelConfig, VizType } from "../../types/dashboard";
 
 interface Props {
@@ -30,6 +31,34 @@ const SPAN_OPTIONS = [
   { label: "Full width", value: 4 },
 ];
 
+const COLOR_PALETTES = [
+  {
+    name: "Neon",
+    colors: ["#00ff87", "#0ff", "#ff00ff", "#ffff00", "#ff3366", "#7c3aed"],
+    preview: ["#00ff87", "#0ff", "#ff00ff", "#ffff00"],
+  },
+  {
+    name: "Electric",
+    colors: ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"],
+    preview: ["#3b82f6", "#06b6d4", "#10b981", "#f59e0b"],
+  },
+  {
+    name: "Sunset Surfing",
+    colors: ["#FD5C5A", "#FECB75", "#4CC2C0", "#8BDADA", "#ff8c42", "#a855f7"],
+    preview: ["#FD5C5A", "#FECB75", "#4CC2C0", "#8BDADA"],
+  },
+  {
+    name: "Cyberpunk",
+    colors: ["#ff2d55", "#5ac8fa", "#30d158", "#ff9500", "#bf5af2", "#64d2ff"],
+    preview: ["#ff2d55", "#5ac8fa", "#30d158", "#ff9500"],
+  },
+  {
+    name: "Pastel",
+    colors: ["#93c5fd", "#86efac", "#fda4af", "#fde68a", "#c4b5fd", "#a5f3fc"],
+    preview: ["#93c5fd", "#86efac", "#fda4af", "#fde68a"],
+  },
+];
+
 export function AddPanelModal({ onAdd, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [spl, setSpl] = useState("index=_internal | timechart span=1m count by host");
@@ -37,6 +66,7 @@ export function AddPanelModal({ onAdd, onClose }: Props) {
   const [earliest, setEarliest] = useState("-1h");
   const [refreshInterval, setRefreshInterval] = useState(30);
   const [span, setSpan] = useState(4);
+  const [paletteIndex, setPaletteIndex] = useState(0);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +80,9 @@ export function AddPanelModal({ onAdd, onClose }: Props) {
       refreshInterval,
       span: span as 1 | 2 | 3 | 4,
       height: vizType === "kpi" ? "sm" : "md",
+      chartOptions: {
+        colors: COLOR_PALETTES[paletteIndex].colors,
+      },
     };
     onAdd(panel);
     onClose();
@@ -58,7 +91,7 @@ export function AddPanelModal({ onAdd, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-xl border border-surface-border bg-surface-raised p-6 shadow-2xl">
+      <div className="relative w-full max-w-lg rounded-xl border border-surface-border bg-surface-raised p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white">Add Dashboard Panel</h2>
@@ -125,6 +158,37 @@ export function AddPanelModal({ onAdd, onClose }: Props) {
                 ))}
               </select>
             </label>
+          </div>
+
+          {/* Color Palette */}
+          <div>
+            <span className="text-sm font-medium text-gray-300 mb-2 block">Color Palette</span>
+            <div className="flex flex-col gap-2">
+              {COLOR_PALETTES.map((palette, i) => (
+                <button
+                  key={palette.name}
+                  type="button"
+                  onClick={() => setPaletteIndex(i)}
+                  className={clsx(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                    paletteIndex === i
+                      ? "bg-brand-500/10 border border-brand-500/30"
+                      : "bg-surface border border-surface-border hover:border-gray-600"
+                  )}
+                >
+                  <div className="flex gap-1">
+                    {palette.preview.map((c) => (
+                      <div
+                        key={c}
+                        className="w-5 h-5 rounded-full"
+                        style={{ backgroundColor: c, boxShadow: paletteIndex === i ? `0 0 8px ${c}40` : undefined }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium text-gray-300">{palette.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Width + Refresh */}

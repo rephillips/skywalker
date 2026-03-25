@@ -31,7 +31,7 @@ function detectChartType(spl: string): ChartType {
   return "line";
 }
 
-const CHART_COLORS = ["indigo", "cyan", "emerald", "amber", "rose", "violet", "blue", "orange"];
+const CHART_COLORS = ["emerald", "cyan", "fuchsia", "yellow", "rose", "violet", "blue", "orange"];
 
 export function SearchPage() {
   const [spl, setSpl] = useState("index=_internal | timechart span=1m count by host");
@@ -289,6 +289,8 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   colors={CHART_COLORS.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
+                  showLegend
+                  legendPosition="right"
                   className="h-full"
                 />
               )}
@@ -300,6 +302,8 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   colors={CHART_COLORS.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
+                  showLegend
+                  legendPosition="right"
                   className="h-full"
                 />
               )}
@@ -311,6 +315,8 @@ ${JSON.stringify({ spl: lastSearchedSpl, earliest: TIME_PRESETS[timePreset].earl
                   colors={CHART_COLORS.slice(0, chartCategories.length)}
                   yAxisWidth={56}
                   showAnimation
+                  showLegend
+                  legendPosition="right"
                   className="h-full"
                 />
               )}
