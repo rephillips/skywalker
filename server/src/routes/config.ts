@@ -59,6 +59,9 @@ router.post("/saved-search/update", async (req, res) => {
     const ownerPath = owner || "-";
     const appPath = app || "-";
     const body = new URLSearchParams();
+    // Always preserve scheduled state
+    body.set("is_scheduled", "1");
+    body.set("disabled", "0");
     if (updates.cron_schedule) body.set("cron_schedule", updates.cron_schedule);
     if (updates["dispatch.earliest_time"]) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
     if (updates["dispatch.latest_time"]) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
