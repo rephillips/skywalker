@@ -125,12 +125,24 @@ export function SettingsPage() {
               )}
             </div>
             {isConnected && (
-              <button
-                onClick={handleDisconnect}
-                className="ml-auto rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
-              >
-                Disconnect
-              </button>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => {
+                    setToken("");
+                    setBaseUrl("https://");
+                    setMessage(null);
+                  }}
+                  className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-300 hover:bg-surface-hover transition-colors"
+                >
+                  New Connection
+                </button>
+                <button
+                  onClick={handleDisconnect}
+                  className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+                >
+                  Clear &amp; Disconnect
+                </button>
+              </div>
             )}
           </div>
         </div>
