@@ -70,14 +70,16 @@ router.post("/saved-search/update", async (req, res) => {
     // Preserve the search itself
     if (currentContent.search) body.set("search", currentContent.search);
 
-    // Apply the user's changes
-    if (updates.cron_schedule) body.set("cron_schedule", updates.cron_schedule);
-    if (updates["dispatch.earliest_time"]) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
-    if (updates["dispatch.latest_time"]) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
+    // Apply all user's changes — always send even if same value
+    if (updates.cron_schedule !== undefined) body.set("cron_schedule", updates.cron_schedule);
+    if (updates["dispatch.earliest_time"] !== undefined) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
+    if (updates["dispatch.latest_time"] !== undefined) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
 
-    console.log(`[SavedSearch] Updating "${name}" in ${appPath}: ${body.toString()}`);
+    const postUrl = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
+    console.log(`[SavedSearch] POST ${postUrl}`);
+    console.log(`[SavedSearch] Body: ${body.toString()}`);
 
-    const url = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
+    const url = postUrl;
 
     const data = await splunkFetch(url, {
       method: "POST",

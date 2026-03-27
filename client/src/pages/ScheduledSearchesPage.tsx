@@ -257,16 +257,14 @@ export function ScheduledSearchesPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const updates: Record<string, string> = {};
-      if (fixCron !== (row["cron_schedule"] || "")) updates["cron_schedule"] = fixCron;
-      if (fixEarliest !== (row["dispatch.earliest_time"] || "")) updates["dispatch.earliest_time"] = fixEarliest;
-      if (fixLatest !== (row["dispatch.latest_time"] || "")) updates["dispatch.latest_time"] = fixLatest;
+      // Always send all fields to ensure the update takes effect
+      const updates: Record<string, string> = {
+        "cron_schedule": fixCron,
+        "dispatch.earliest_time": fixEarliest,
+        "dispatch.latest_time": fixLatest,
+      };
 
-      if (Object.keys(updates).length === 0) {
-        setSaveMsg({ type: "warning", text: "No changes to save" });
-        setSaving(false);
-        return;
-      }
+      console.log("[Fix] Pushing update:", JSON.stringify(updates), "for:", row["title"]);
 
       const res = await api.updateSavedSearch(
         row["title"] || "",
