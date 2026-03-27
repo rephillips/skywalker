@@ -99,6 +99,61 @@ function analyzeEfficiency(earliest: string, cron: string): Efficiency {
   return { timeWindowSec: tw, cronIntervalSec: ci, ratio, status: "critical", message: `${ratio.toFixed(1)}x — Heavy overlap: scanning ${(ratio - 1).toFixed(0)}x extra data` };
 }
 
+const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** Convert cron to human-readable description */
+function cronToHuman(cron: string): string {
+  if (!cron) return "";
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length < 5) return cron;
+  const [minute, hour, dom, month, dow] = parts;
+
+  const pieces: string[] = [];
+
+  // Minute
+  if (minute === "*") pieces.push("Every minute");
+  else if (minute.startsWith("*/")) pieces.push(`Every ${minute.slice(2)} minutes`);
+  else pieces.push(`At minute ${minute}`);
+
+  // Hour
+  if (hour === "*" && !minute.startsWith("*/") && minute !== "*") {
+    pieces.push("of every hour");
+  } else if (hour.startsWith("*/")) {
+    pieces.push(`every ${hour.slice(2)} hours`);
+  } else if (hour !== "*") {
+    const h = parseInt(hour);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    const min = minute === "*" || minute.startsWith("*/") ? "" : `:${minute.padStart(2, "0")}`;
+    pieces.length = 0; // reset
+    pieces.push(`At ${h12}${min} ${ampm}`);
+  }
+
+  // Day of month
+  if (dom !== "*" && dom !== "?") {
+    pieces.push(`on day ${dom} of the month`);
+  }
+
+  // Month
+  if (month !== "*") {
+    const m = parseInt(month);
+    if (m >= 1 && m <= 12) pieces.push(`in ${MONTH_NAMES[m]}`);
+    else pieces.push(`in month ${month}`);
+  }
+
+  // Day of week
+  if (dow !== "*" && dow !== "?") {
+    const days = dow.split(",").map((d) => {
+      const n = parseInt(d);
+      return n >= 0 && n <= 6 ? DOW_NAMES[n] : d;
+    });
+    pieces.push(`on ${days.join(", ")}`);
+  }
+
+  return pieces.join(" ");
+}
+
 function formatSeconds(sec: number): string {
   if (sec < 60) return `${sec}s`;
   if (sec < 3600) return `${Math.round(sec / 60)}m`;
@@ -442,7 +497,11 @@ export function ScheduledSearchesPage() {
                             );
                           }
                           return (
-                            <td key={col.key} className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate" title={val}>
+                            <td
+                              key={col.key}
+                              className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate"
+                              title={col.key === "cron_schedule" ? cronToHuman(val) : val}
+                            >
                               {val}
                             </td>
                           );
