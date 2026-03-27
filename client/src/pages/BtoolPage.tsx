@@ -286,7 +286,7 @@ export function BtoolPage() {
                       <div key={ri} className={rows.length > 1 ? "border-t border-surface-border/30" : ""}>
                         <table className="w-full text-sm">
                           <tbody>
-                            {columns.filter((col) => col !== "btool.stanza").map((col) => {
+                            {columns.filter((col) => col !== "btool.stanza" && col !== "btool.stanza.app" && col !== "btool.stanza.scope").map((col) => {
                               const val = row[col] || "";
                               if (!val) return null;
                               return (
@@ -300,7 +300,9 @@ export function BtoolPage() {
                                         {val}
                                       </span>
                                     ) : col === "_raw" ? (
-                                      <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">{val}</pre>
+                                      <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">{
+                                        val.split("\n").filter((l: string) => !l.match(/^\s*\S+\.(conf|spec)\s+\[/)).join("\n")
+                                      }</pre>
                                     ) : (
                                       val
                                     )}
