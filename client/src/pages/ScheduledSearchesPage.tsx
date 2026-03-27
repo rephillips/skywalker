@@ -182,9 +182,9 @@ export function ScheduledSearchesPage() {
     setLoading(true);
     setError(null);
     try {
-      // Append a comment with timestamp to bust Splunk's search cache
-      const cacheBust = ` | eval _cache_bust="${Date.now()}" | fields - _cache_bust`;
-      const res = await api.search((query || spl) + cacheBust);
+      const res = await api.search(query || spl);
+      console.log("[ScheduledSearches] Got", res.results?.length, "results. Fields:", res.results?.[0] ? Object.keys(res.results[0]) : "none");
+      if (res.results?.[0]) console.log("[ScheduledSearches] Sample:", JSON.stringify(res.results[0]).slice(0, 300));
       setResults(res.results || []);
     } catch (err) {
       setError((err as Error).message);
@@ -498,12 +498,16 @@ export function ScheduledSearchesPage() {
                               </td>
                             );
                           }
+                          if (col.key === "cron_schedule" && val) {
+                            return (
+                              <td key={col.key} className="px-3 py-2">
+                                <div className="text-xs font-mono text-gray-300">{val}</div>
+                                <div className="text-[9px] text-gray-500">{cronToHuman(val)}</div>
+                              </td>
+                            );
+                          }
                           return (
-                            <td
-                              key={col.key}
-                              className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate"
-                              title={col.key === "cron_schedule" ? cronToHuman(val) : val}
-                            >
+                            <td key={col.key} className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate" title={val}>
                               {val}
                             </td>
                           );

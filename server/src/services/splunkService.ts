@@ -56,6 +56,7 @@ export async function createSearchJob(
   const body = new URLSearchParams();
   body.set("search", normalizedSpl);
   body.set("output_mode", "json");
+  body.set("reuse_max_seconds_ago", "0");
   if (earliest) body.set("earliest_time", earliest);
   if (latest) body.set("latest_time", latest);
 
