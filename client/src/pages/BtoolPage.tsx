@@ -99,21 +99,23 @@ export function BtoolPage() {
   }
 
   const lowerFilter = filterText.toLowerCase();
-  const filtered = results.filter((r) => {
-    // Exclude path filter
-    if (excludeEnabled && excludePath) {
-      const raw = r._raw || "";
-      const allVals = Object.values(r).join(" ");
-      if (raw.includes(excludePath) || allVals.includes(excludePath)) {
-        // Only exclude if ALL lines in _raw are from the excluded path
-        const lines = raw.split("\n").filter((l: string) => l.trim());
-        const allExcluded = lines.length > 0 && lines.every((l: string) => l.includes(excludePath));
-        if (allExcluded) return false;
+  const filtered = results
+    .map((r) => {
+      // Strip excluded path lines from _raw
+      if (excludeEnabled && excludePath && r._raw) {
+        const lines = r._raw.split("\n");
+        // Keep stanza header lines (contain []) and lines not from excluded path
+        const kept = lines.filter((l: string) => l.match(/\[.*\]/) || !l.includes(excludePath));
+        if (kept.length === 0) return null; // All lines excluded — drop entire event
+        return { ...r, _raw: kept.join("\n") };
       }
-    }
-    if (!filterText) return true;
-    return Object.values(r).some((v) => String(v).toLowerCase().includes(lowerFilter));
-  });
+      return r;
+    })
+    .filter((r): r is SplunkResult => {
+      if (r === null) return false;
+      if (!filterText) return true;
+      return Object.values(r).some((v) => String(v).toLowerCase().includes(lowerFilter));
+    });
 
   // Group by stanza
   const stanzaGroups = new Map<string, SplunkResult[]>();
