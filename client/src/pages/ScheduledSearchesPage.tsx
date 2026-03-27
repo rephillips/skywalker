@@ -183,9 +183,9 @@ export function ScheduledSearchesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.search(query || spl);
-      console.log("[ScheduledSearches] Got", res.results?.length, "results. Fields:", res.results?.[0] ? Object.keys(res.results[0]) : "none");
-      if (res.results?.[0]) console.log("[ScheduledSearches] Sample:", JSON.stringify(res.results[0]).slice(0, 300));
+      // Append unique comment so Splunk creates a brand new search job
+      const uniqueSpl = `${query || spl} | eval _t=${Date.now()} | fields - _t`;
+      const res = await api.search(uniqueSpl);
       setResults(res.results || []);
     } catch (err) {
       setError((err as Error).message);
