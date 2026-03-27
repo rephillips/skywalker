@@ -57,8 +57,8 @@ export async function createSearchJob(
   body.set("search", normalizedSpl);
   body.set("output_mode", "json");
   body.set("reuse_max_seconds_ago", "0");
-  if (earliest) body.set("earliest_time", earliest);
-  if (latest) body.set("latest_time", latest);
+  if (earliest && earliest !== "undefined") body.set("earliest_time", earliest);
+  if (latest && latest !== "undefined") body.set("latest_time", latest);
 
   const data = await splunkFetch("/services/search/v2/jobs", {
     method: "POST",
