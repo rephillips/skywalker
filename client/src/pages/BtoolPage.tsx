@@ -287,11 +287,19 @@ export function BtoolPage() {
                         <pre className="text-[11px] font-mono text-gray-300 leading-relaxed whitespace-pre-wrap">{
                           rows.map((row) => {
                             const raw = row._raw || "";
-                            // Strip stanza header lines, keep only key=value lines
                             return raw.split("\n")
-                              .filter((l: string) => l.trim() && !l.match(/^\s*\S+\.(conf|spec)\s+\[/))
+                              .filter((l: string) => {
+                                if (!l.trim()) return false;
+                                // Strip stanza header lines
+                                if (l.match(/^\s*\S+\.(conf|spec)\s+\[/)) return false;
+                                // Apply exclude path filter per line
+                                if (excludeEnabled && excludePath && l.includes(excludePath)) return false;
+                                // Apply text filter per line
+                                if (filterText && !l.toLowerCase().includes(lowerFilter)) return false;
+                                return true;
+                              })
                               .join("\n");
-                          }).join("\n")
+                          }).filter((s) => s.trim()).join("\n")
                         }</pre>
                       </div>
                     )}
