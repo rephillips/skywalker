@@ -281,39 +281,20 @@ export function BtoolPage() {
                       {scope && <span className="text-[10px] text-gray-600">scope: {scope}</span>}
                       <span className="ml-auto text-[10px] text-gray-600">{isCollapsed ? "▶" : "▼"}</span>
                     </button>
-                    {/* Stanza content */}
-                    {!isCollapsed && rows.map((row, ri) => (
-                      <div key={ri} className={rows.length > 1 ? "border-t border-surface-border/30" : ""}>
-                        <table className="w-full text-sm">
-                          <tbody>
-                            {columns.filter((col) => col !== "btool.stanza" && col !== "btool.stanza.app" && col !== "btool.stanza.scope").map((col) => {
-                              const val = row[col] || "";
-                              if (!val) return null;
-                              return (
-                                <tr key={col} className="border-b border-surface-border/20 hover:bg-surface-hover/30 transition-colors">
-                                  <td className="px-4 py-1 text-[10px] font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap w-44 align-top">
-                                    {col}
-                                  </td>
-                                  <td className="px-3 py-1 text-xs font-mono text-gray-300 break-all">
-                                    {col === "message_type" && MESSAGE_COLORS[val] ? (
-                                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${MESSAGE_COLORS[val]}`}>
-                                        {val}
-                                      </span>
-                                    ) : col === "_raw" ? (
-                                      <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">{
-                                        val.split("\n").filter((l: string) => !l.match(/^\s*\S+\.(conf|spec)\s+\[/)).join("\n")
-                                      }</pre>
-                                    ) : (
-                                      val
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                    {/* Stanza content — just the raw btool output */}
+                    {!isCollapsed && (
+                      <div className="px-4 py-2 border-t border-surface-border/30">
+                        <pre className="text-[11px] font-mono text-gray-300 leading-relaxed whitespace-pre-wrap">{
+                          rows.map((row) => {
+                            const raw = row._raw || "";
+                            // Strip stanza header lines, keep only key=value lines
+                            return raw.split("\n")
+                              .filter((l: string) => l.trim() && !l.match(/^\s*\S+\.(conf|spec)\s+\[/))
+                              .join("\n");
+                          }).join("\n")
+                        }</pre>
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })}
