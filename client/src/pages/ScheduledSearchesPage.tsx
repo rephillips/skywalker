@@ -372,7 +372,7 @@ export function ScheduledSearchesPage() {
                       ? "bg-amber-500/5"
                       : "";
 
-                    return (
+                    return (<>
                       <tr key={i} className={clsx("border-b border-surface-border/50 hover:bg-surface-hover transition-colors group", rowHighlight)}>
                         {showEfficiency && (
                           <td className="px-3 py-2">
@@ -523,7 +523,7 @@ export function ScheduledSearchesPage() {
                           </td>
                         </tr>
                       )}
-                    );
+                    </>);
                   })}
                 </tbody>
               </table>
