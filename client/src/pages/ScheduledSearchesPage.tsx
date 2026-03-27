@@ -882,7 +882,7 @@ function AuditInefficiency() {
                 {results.map((row, i) => (
                   <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
                     {columns.map((col) => (
-                      <td key={col} className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate" title={row[col]}>
+                      <td key={col} className="px-3 py-2 text-xs font-mono text-gray-300 whitespace-nowrap" title={row[col]}>
                         {col === "Ratio" ? (
                           <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-red-500/15 text-red-400">
                             {row[col]}
