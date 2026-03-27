@@ -237,14 +237,12 @@ export function ScheduledSearchesPage() {
     }
   }
 
-  useEffect(() => { fetchScheduled(); }, [spl]);
+  useEffect(() => { fetchScheduled(); }, [spl, showDisabled]);
 
   function toggleDisabled() {
-    const next = !showDisabled;
-    setShowDisabled(next);
-    const newSpl = next ? ALL_SPL : ENABLED_SPL;
-    setSpl(newSpl);
-    setCustomSpl(newSpl);
+    setShowDisabled((prev) => !prev);
+    // SPL change triggers useEffect refetch, but REST path filters client-side
+    // so we just need to toggle the state — the filter in fetchScheduled reads it
   }
 
   function startFix(index: number, row: SplunkResult) {
