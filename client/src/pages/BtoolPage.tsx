@@ -268,19 +268,40 @@ export function BtoolPage() {
                 const isCollapsed = collapsedStanzas.has(stanza);
                 const app = rows[0]?.["btool.stanza.app"] || rows[0]?.["btool.source"] || "";
                 const scope = rows[0]?.["btool.stanza.scope"] || "";
+                const confName = rows[0]?.["btool.cmd.conf"] || rows[0]?.["btool.source"] || "";
+                const confSpecUrl = confName
+                  ? `https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/latest/configuration-file-reference/latest-configuration-file-reference/${confName}.conf`
+                  : "";
                 return (
                   <div key={stanza} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
                     {/* Stanza header */}
-                    <button
-                      onClick={() => toggleStanza(stanza)}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-hover transition-colors"
-                    >
-                      <code className="text-sm font-mono text-brand-400 font-semibold">[{stanza}]</code>
-                      <span className="text-[10px] text-gray-500">{rows.length} event{rows.length !== 1 && "s"}</span>
-                      {app && <span className="text-[10px] text-gray-600">app: {app}</span>}
-                      {scope && <span className="text-[10px] text-gray-600">scope: {scope}</span>}
-                      <span className="ml-auto text-[10px] text-gray-600">{isCollapsed ? "▶" : "▼"}</span>
-                    </button>
+                    <div className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors">
+                      <button
+                        onClick={() => toggleStanza(stanza)}
+                        className="flex items-center gap-3 flex-1 text-left"
+                      >
+                        <code className="text-sm font-mono text-brand-400 font-semibold">[{stanza}]</code>
+                        {confName && (
+                          <span className="text-[10px] font-mono text-gray-500">{confName}.conf</span>
+                        )}
+                        <span className="text-[10px] text-gray-500">{rows.length} event{rows.length !== 1 && "s"}</span>
+                        {app && <span className="text-[10px] text-gray-600">app: {app}</span>}
+                        {scope && <span className="text-[10px] text-gray-600">scope: {scope}</span>}
+                        <span className="ml-auto text-[10px] text-gray-600">{isCollapsed ? "▶" : "▼"}</span>
+                      </button>
+                      {confSpecUrl && (
+                        <a
+                          href={confSpecUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors shrink-0"
+                          title={`View ${confName}.conf spec on docs.splunk.com`}
+                        >
+                          spec ↗
+                        </a>
+                      )}
+                    </div>
                     {/* Stanza content — just the raw btool output */}
                     {!isCollapsed && (
                       <div className="px-4 py-2 border-t border-surface-border/30">
