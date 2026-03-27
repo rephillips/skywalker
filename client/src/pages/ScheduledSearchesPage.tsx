@@ -9,10 +9,12 @@ import type { SplunkResult } from "../types/splunk";
 const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, next_scheduled_time, actions, search';
 const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, next_scheduled_time, actions, disabled, search';
 
-/** Parse a Splunk relative time string like -1h, -15m, -1d, -7d into seconds */
+/** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into seconds */
 function parseTimeRangeSeconds(earliest: string): number | null {
   if (!earliest) return null;
-  const m = earliest.match(/^-(\d+)(s|m|h|d|w|mon)$/);
+  // Strip snap-to modifiers like @h, @d
+  const clean = earliest.replace(/@[a-z]+$/i, "");
+  const m = clean.match(/^-(\d+)(s|m|h|d|w|mon)$/);
   if (!m) return null;
   const val = parseInt(m[1]);
   switch (m[2]) {
@@ -79,8 +81,11 @@ function analyzeEfficiency(earliest: string, cron: string): Efficiency {
   const tw = parseTimeRangeSeconds(earliest);
   const ci = parseCronIntervalSeconds(cron);
 
+  if (tw === null && ci !== null) {
+    return { timeWindowSec: null, cronIntervalSec: ci, ratio: null, status: "warning", message: `No earliest set — cron runs every ${formatSeconds(ci)}` };
+  }
   if (tw === null || ci === null) {
-    return { timeWindowSec: tw, cronIntervalSec: ci, ratio: null, status: "unknown", message: "Cannot parse" };
+    return { timeWindowSec: tw, cronIntervalSec: ci, ratio: null, status: "unknown", message: tw === null ? "No earliest time" : "Cannot parse cron" };
   }
 
   const ratio = tw / ci;
