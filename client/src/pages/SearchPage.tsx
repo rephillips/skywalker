@@ -3,6 +3,7 @@ import { Search, Play, Loader2, Clock, BarChart3, Table2, LineChart as LineChart
 import { LineChart, BarChart, AreaChart } from "@tremor/react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
+import { CopyButton } from "../components/common/CopyButton";
 import { api } from "../services/api";
 import type { SplunkResult } from "../types/splunk";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -195,7 +196,10 @@ export function SearchPage() {
             {showApiCall && (
               <div className="border-t border-surface-border px-4 py-3 space-y-2">
                 <div>
-                  <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">1. Create Search Job</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">1. Create Search Job</span>
+                    <CopyButton text={`curl -k -X POST https://<splunk-host>:8089/services/search/v2/jobs -H "Authorization: Bearer <token>" -d search="${encodeURIComponent(lastSearchedSpl)}" -d earliest_time="${TIME_PRESETS[timePreset].earliest}" -d latest_time="${TIME_PRESETS[timePreset].latest}" -d output_mode=json`} />
+                  </div>
                   <pre className="mt-1 text-xs font-mono text-emerald-400/90 whitespace-pre-wrap break-all leading-relaxed">
 {`curl -k -X POST https://<splunk-host>:8089/services/search/v2/jobs \\
   -H "Authorization: Bearer <token>" \\

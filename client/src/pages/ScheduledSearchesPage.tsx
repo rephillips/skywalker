@@ -5,6 +5,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import type { SplunkResult } from "../types/splunk";
+import { CopyButton } from "../components/common/CopyButton";
 
 const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, search';
 const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, disabled, search';
@@ -401,7 +402,10 @@ export function ScheduledSearchesPage() {
               </button>
             </div>
           ) : (
-            <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{spl}</pre>
+            <div className="flex items-start gap-2">
+              <pre className="flex-1 text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{spl}</pre>
+              <CopyButton text={spl} />
+            </div>
           )}
         </div>
 
@@ -601,7 +605,10 @@ export function ScheduledSearchesPage() {
                       {expandedRow === i && row.search && (
                         <tr className="bg-surface/50">
                           <td colSpan={columns.length + (showEfficiency ? 1 : 0)} className="px-4 py-2">
-                            <span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide block mb-1">SPL Query</span>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
+                              <CopyButton text={row.search} />
+                            </div>
                             <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{row.search}</pre>
                           </td>
                         </tr>
@@ -857,7 +864,10 @@ function AuditInefficiency() {
               </button>
             </div>
           ) : (
-            <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-60 overflow-auto">{customSpl}</pre>
+            <div className="flex items-start gap-2">
+              <pre className="flex-1 text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-60 overflow-auto">{customSpl}</pre>
+              <CopyButton text={customSpl} />
+            </div>
           )}
         </div>
       )}

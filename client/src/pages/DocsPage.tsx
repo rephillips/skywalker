@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { apiCategories, apiConventions, type Endpoint } from "../config/apiReference";
 import { api } from "../services/api";
+import { CopyButton } from "../components/common/CopyButton";
 
 const METHOD_COLORS: Record<string, string> = {
   GET: "bg-emerald-500/15 text-emerald-400",
@@ -196,9 +197,12 @@ function EndpointRow({ ep, onTryIt }: { ep: Endpoint; onTryIt: (path: string, me
             <div className="ml-4 mt-1 rounded-lg border border-surface-border bg-surface p-3 space-y-2">
               {/* Request */}
               <div>
-                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
-                  Request
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                    Request
+                  </span>
+                  <CopyButton text={ep.example.request} />
+                </div>
                 <pre className="mt-1 text-xs font-mono text-emerald-400/90 whitespace-pre-wrap break-all leading-relaxed">
                   {ep.example.request}
                 </pre>
