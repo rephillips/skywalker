@@ -191,52 +191,39 @@ export function BtoolPage() {
             </div>
           )}
 
-          {/* Results table */}
+          {/* Results — vertical cards */}
           {filtered.length > 0 && (
-            <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden flex-1 min-h-0">
-              <div className="overflow-auto h-full">
-                <table className="text-sm">
-                  <thead className="sticky top-0 bg-surface-raised z-10">
-                    <tr className="border-b border-surface-border">
-                      {columns.map((col) => (
-                        <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((row, i) => (
-                      <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
-                        {columns.map((col) => {
-                          const val = row[col] || "";
-                          if (col === "message_type" && MESSAGE_COLORS[val]) {
-                            return (
-                              <td key={col} className="px-3 py-1.5">
+            <div className="flex-1 min-h-0 overflow-auto flex flex-col gap-3">
+              {filtered.map((row, i) => (
+                <div key={i} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {columns.map((col) => {
+                        const val = row[col] || "";
+                        if (!val) return null;
+                        return (
+                          <tr key={col} className="border-b border-surface-border/30 hover:bg-surface-hover/50 transition-colors">
+                            <td className="px-3 py-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap w-40 align-top">
+                              {col}
+                            </td>
+                            <td className="px-3 py-1.5 text-xs font-mono text-gray-300 break-all">
+                              {col === "message_type" && MESSAGE_COLORS[val] ? (
                                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${MESSAGE_COLORS[val]}`}>
                                   {val}
                                 </span>
-                              </td>
-                            );
-                          }
-                          if (col === "_raw") {
-                            return (
-                              <td key={col} className="px-3 py-1.5 text-xs font-mono text-gray-300 whitespace-pre-wrap max-w-2xl">
-                                {val}
-                              </td>
-                            );
-                          }
-                          return (
-                            <td key={col} className="px-3 py-1.5 text-xs font-mono text-gray-300 whitespace-nowrap" title={val}>
-                              {val}
+                              ) : col === "_raw" ? (
+                                <pre className="whitespace-pre-wrap">{val}</pre>
+                              ) : (
+                                val
+                              )}
                             </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           )}
 
