@@ -196,25 +196,31 @@ export function ScheduledSearchesPage() {
     setError(null);
     try {
       if (!query && !editSpl) {
-        // Use direct REST proxy instead of | rest SPL to avoid caching
-        const endpoint = showDisabled
-          ? "saved/searches?count=0&search=is_scheduled%3D1"
-          : "saved/searches?count=0&search=is_scheduled%3D1%20AND%20disabled%3D0";
-        const res = await api.proxy(endpoint);
+        // Use direct REST proxy to avoid | rest caching
+        const res = await api.proxy("saved/searches?count=0");
         if (res.status === "ok" && res.data?.entry) {
-          const parsed: SplunkResult[] = res.data.entry.map((entry: any) => ({
-            title: entry.name || "",
-            cron_schedule: entry.content?.cron_schedule || "",
-            "dispatch.earliest_time": entry.content?.["dispatch.earliest_time"] || "",
-            "dispatch.latest_time": entry.content?.["dispatch.latest_time"] || "",
-            "eai:acl.app": entry.acl?.app || "",
-            "eai:acl.owner": entry.acl?.owner || "",
-            "eai:acl.sharing": entry.acl?.sharing || "",
-            next_scheduled_time: entry.content?.next_scheduled_time || "",
-            actions: entry.content?.actions || "",
-            disabled: String(entry.content?.disabled || "0"),
-            search: entry.content?.search || "",
-          }));
+          const parsed: SplunkResult[] = res.data.entry
+            .filter((entry: any) => {
+              const c = entry.content || {};
+              const isScheduled = c.is_scheduled === "1" || c.is_scheduled === true;
+              const isDisabled = c.disabled === "1" || c.disabled === true;
+              if (!isScheduled) return false;
+              if (!showDisabled && isDisabled) return false;
+              return true;
+            })
+            .map((entry: any) => ({
+              title: entry.name || "",
+              cron_schedule: entry.content?.cron_schedule || "",
+              "dispatch.earliest_time": entry.content?.["dispatch.earliest_time"] || "",
+              "dispatch.latest_time": entry.content?.["dispatch.latest_time"] || "",
+              "eai:acl.app": entry.acl?.app || "",
+              "eai:acl.owner": entry.acl?.owner || "",
+              "eai:acl.sharing": entry.acl?.sharing || "",
+              next_scheduled_time: entry.content?.next_scheduled_time || "",
+              actions: entry.content?.actions || "",
+              disabled: String(entry.content?.disabled || "0"),
+              search: entry.content?.search || "",
+            }));
           setResults(parsed);
         }
       } else {
