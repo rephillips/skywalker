@@ -326,8 +326,6 @@ export function BtoolPage() {
                                 if (l.match(/^\s*\S+\.(conf|spec)\s+\[/)) return false;
                                 // Apply exclude path filter per line
                                 if (excludeEnabled && excludePath && l.includes(excludePath)) return false;
-                                // Apply text filter per line
-                                if (filterText && !l.toLowerCase().includes(lowerFilter)) return false;
                                 return true;
                               })
                               .join("\n");
