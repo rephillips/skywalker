@@ -12,6 +12,7 @@ import {
   FileText,
   ClipboardCheck,
   CalendarClock,
+  Terminal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ export const navigation: NavItem[] = [
   },
   { label: "Security", icon: Shield, path: "/security" },
   { label: "Conf Files", icon: FileText, path: "/conf-reference" },
+  { label: "Btool Check", icon: Terminal, path: "/btool" },
   { label: "API Docs", icon: BookOpen, path: "/docs" },
   { label: "Settings", icon: Settings, path: "/settings" },
 ];
