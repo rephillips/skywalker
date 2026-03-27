@@ -171,6 +171,7 @@ export function ScheduledSearchesPage() {
   const [spl, setSpl] = useState(ENABLED_SPL);
   const [editSpl, setEditSpl] = useState(false);
   const [customSpl, setCustomSpl] = useState(ENABLED_SPL);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [fixingRow, setFixingRow] = useState<number | null>(null);
   const [fixCron, setFixCron] = useState("");
   const [fixEarliest, setFixEarliest] = useState("");
@@ -431,7 +432,11 @@ export function ScheduledSearchesPage() {
                       : "";
 
                     return (<>
-                      <tr key={i} className={clsx("border-b border-surface-border/50 hover:bg-surface-hover transition-colors group", rowHighlight)}>
+                      <tr
+                        key={i}
+                        className={clsx("border-b border-surface-border/50 hover:bg-surface-hover transition-colors group cursor-pointer", rowHighlight)}
+                        onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                      >
                         {showEfficiency && (
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
@@ -513,6 +518,14 @@ export function ScheduledSearchesPage() {
                           );
                         })}
                       </tr>
+                      {expandedRow === i && row.search && (
+                        <tr className="bg-surface/50">
+                          <td colSpan={columns.length + (showEfficiency ? 1 : 0)} className="px-4 py-2">
+                            <span className="text-[9px] font-medium text-gray-500 uppercase tracking-wide block mb-1">SPL Query</span>
+                            <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{row.search}</pre>
+                          </td>
+                        </tr>
+                      )}
                       {fixingRow === i && showEfficiency && (
                         <tr className="bg-surface">
                           <td colSpan={columns.length + 1} className="px-4 py-3">
