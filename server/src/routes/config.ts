@@ -58,11 +58,24 @@ router.post("/saved-search/update", async (req, res) => {
 
     const ownerPath = owner || "-";
     const appPath = app || "-";
+    // First, get current state to preserve it
+    const getUrl = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
+    const current = await splunkFetch(getUrl);
+    const currentContent = current?.entry?.[0]?.content || {};
+
     const body = new URLSearchParams();
-    // Only send the fields being changed — don't touch is_scheduled or disabled
+    // Preserve current scheduling state
+    body.set("is_scheduled", currentContent.is_scheduled ?? "1");
+    body.set("disabled", currentContent.disabled ?? "0");
+    // Preserve the search itself
+    if (currentContent.search) body.set("search", currentContent.search);
+
+    // Apply the user's changes
     if (updates.cron_schedule) body.set("cron_schedule", updates.cron_schedule);
     if (updates["dispatch.earliest_time"]) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
     if (updates["dispatch.latest_time"]) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
+
+    console.log(`[SavedSearch] Updating "${name}" in ${appPath}: ${body.toString()}`);
 
     const url = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
 
