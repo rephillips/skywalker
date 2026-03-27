@@ -400,40 +400,18 @@ function SidFooter({ sid }: { sid: string }) {
     setDownloading(true);
     try {
       const data = await api.dispatchFull(sid);
-
-      if (data.method === "tar" && data.base64) {
-        // Got a tar.gz — decode base64 and download as binary
-        const binary = atob(data.base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "application/gzip" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = data.filename || `dispatch_${sid}.tar.gz`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        // Fallback: download individual files
-        const files = data.files || {};
-        for (const [name, content] of Object.entries(files)) {
-          if (!content) continue;
-          const blob = new Blob([content as string], {
-            type: name.endsWith(".json") ? "application/json"
-              : name.endsWith(".csv") ? "text/csv"
-              : "text/plain",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${sid}_${name}`;
-          a.click();
-          URL.revokeObjectURL(url);
-          await new Promise((r) => setTimeout(r, 200));
-        }
+      const binary = atob(data.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
       }
+      const blob = new Blob([bytes], { type: "application/gzip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dispatch_${sid}.tar.gz`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       alert(`Download failed: ${(err as Error).message}`);
     } finally {

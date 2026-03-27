@@ -159,68 +159,39 @@ router.get("/search/:sid/dispatch", async (req, res, next) => {
   }
 });
 
-// Package full dispatch directory as tar.gz via SPL script, then download
+// Tar and download full dispatch directory
 router.get("/search/:sid/dispatch-tar", async (req, res, next) => {
   try {
     const sid = req.params.sid;
-    const { executeSearch, splunkFetchRaw, splunkFetch } = await import("../services/splunkService.js");
-
+    const { executeSearch } = await import("../services/splunkService.js");
     const tarPath = `/tmp/skywalker_dispatch_${sid}.tar.gz`;
 
-    // Step 1: Run script on Splunk server to tar the dispatch directory
+    // Step 1: Tar the dispatch directory on the Splunk server
     console.log(`[Dispatch] Tarring dispatch dir for SID: ${sid}`);
-    const tarSpl = `| makeresults | eval _raw="tarring" | script bash "tar -czf ${tarPath} -C \\$SPLUNK_HOME/var/run/splunk/dispatch/ ${sid} 2>&1 && echo TAR_SUCCESS || echo TAR_FAILED"`;
+    const tarResult = await executeSearch(
+      `| makeresults | eval _raw="tarring" | script bash "tar -czf ${tarPath} -C \\$SPLUNK_HOME/var/run/splunk/dispatch/ ${sid} 2>&1 && echo TAR_SUCCESS || echo TAR_FAILED"`
+    );
+    const tarOutput = tarResult?.results?.[0]?._raw || "";
+    console.log(`[Dispatch] Tar result: ${tarOutput}`);
 
-    try {
-      const tarResult = await executeSearch(tarSpl);
-      const output = tarResult?.results?.[0]?._raw || "";
-      console.log(`[Dispatch] Tar result: ${output}`);
-
-      if (output.includes("TAR_FAILED")) {
-        throw new Error("tar command failed on Splunk server");
-      }
-    } catch (tarErr) {
-      console.log(`[Dispatch] Tar via script failed, falling back to REST artifacts: ${(tarErr as Error).message}`);
-      // Fallback: download individual files via REST
-      const enc = encodeURIComponent(sid);
-      const files: Record<string, string | null> = {};
-
-      try { files["search.log"] = await splunkFetchRaw(`/services/search/v2/jobs/${enc}/search.log`); } catch { files["search.log"] = null; }
-      try { const info = await splunkFetch(`/services/search/v2/jobs/${enc}?output_mode=json`); files["job_info.json"] = JSON.stringify(info?.entry?.[0]?.content || {}, null, 2); } catch { files["job_info.json"] = null; }
-      try { files["results.csv"] = await splunkFetchRaw(`/services/search/v2/jobs/${enc}/results?output_mode=csv&count=0`); } catch { files["results.csv"] = null; }
-      try { files["events.csv"] = await splunkFetchRaw(`/services/search/v2/jobs/${enc}/events?output_mode=csv&count=0`); } catch { files["events.csv"] = null; }
-      try { const tl = await splunkFetch(`/services/search/v2/jobs/${enc}/timeline?output_mode=json`); files["timeline.json"] = JSON.stringify(tl, null, 2); } catch { files["timeline.json"] = null; }
-      try { const sum = await splunkFetch(`/services/search/v2/jobs/${enc}/summary?output_mode=json`); files["summary.json"] = JSON.stringify(sum, null, 2); } catch { files["summary.json"] = null; }
-
-      res.json({ sid, method: "rest-fallback", files });
-      return;
+    if (tarOutput.includes("TAR_FAILED")) {
+      throw new Error("tar command failed on Splunk server");
     }
 
-    // Step 2: Read the tar.gz back via SPL and send as base64
-    console.log(`[Dispatch] Reading tar.gz from Splunk server`);
-    const readSpl = `| makeresults | eval _raw="reading" | script bash "base64 ${tarPath} && rm -f ${tarPath}"`;
+    // Step 2: Base64 encode the tar.gz and read it back
+    console.log(`[Dispatch] Reading tar.gz`);
+    const readResult = await executeSearch(
+      `| makeresults | eval _raw="reading" | script bash "base64 ${tarPath} && rm -f ${tarPath}"`,
+      undefined, undefined, 60000
+    );
+    const base64Data = readResult?.results?.map((r: any) => r._raw).join("") || "";
 
-    try {
-      const readResult = await executeSearch(readSpl, undefined, undefined, 60000);
-      const base64Data = readResult?.results?.map((r: any) => r._raw).join("") || "";
-
-      if (!base64Data || base64Data.includes("reading")) {
-        throw new Error("Failed to read tar.gz");
-      }
-
-      res.json({
-        sid,
-        method: "tar",
-        filename: `dispatch_${sid}.tar.gz`,
-        contentType: "application/gzip",
-        base64: base64Data,
-      });
-    } catch (readErr) {
-      console.log(`[Dispatch] Reading tar failed: ${(readErr as Error).message}`);
-      // Cleanup
+    if (!base64Data || base64Data === "reading") {
       try { await executeSearch(`| makeresults | script bash "rm -f ${tarPath}"`); } catch {}
-      throw readErr;
+      throw new Error("Failed to read tar.gz from Splunk server");
     }
+
+    res.json({ sid, base64: base64Data });
   } catch (err) {
     next(err);
   }
