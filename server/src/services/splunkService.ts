@@ -21,6 +21,7 @@ export async function splunkFetch(path: string, options?: RequestInit): Promise<
     dispatcher: tlsAgent,
     headers: {
       Authorization: authHeader(),
+      "Cache-Control": "no-cache",
       ...options?.headers,
     },
   });

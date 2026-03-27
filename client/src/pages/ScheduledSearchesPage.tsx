@@ -6,8 +6,8 @@ import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import type { SplunkResult } from "../types/splunk";
 
-const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, next_scheduled_time, actions, search';
-const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, next_scheduled_time, actions, disabled, search';
+const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, search';
+const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, disabled, search';
 
 /** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into seconds */
 function parseTimeRangeSeconds(earliest: string): number | null {
@@ -220,6 +220,7 @@ export function ScheduledSearchesPage() {
     { key: "dispatch.latest_time", label: "Latest" },
     { key: "eai:acl.app", label: "App" },
     { key: "eai:acl.owner", label: "User" },
+    { key: "eai:acl.sharing", label: "Sharing" },
     { key: "next_scheduled_time", label: "Next Run" },
     { key: "actions", label: "Actions" },
   ];

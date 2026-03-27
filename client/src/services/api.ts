@@ -3,7 +3,14 @@ import type { SplunkSearchResponse } from "../types/splunk";
 const BASE = "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, options);
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      "Cache-Control": "no-cache, no-store",
+      "Pragma": "no-cache",
+      ...options?.headers,
+    },
+  });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `Request failed: ${res.status}`);
