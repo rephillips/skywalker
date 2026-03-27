@@ -268,7 +268,18 @@ export function BtoolPage() {
                 const isCollapsed = collapsedStanzas.has(stanza);
                 const app = rows[0]?.["btool.stanza.app"] || rows[0]?.["btool.source"] || "";
                 const scope = rows[0]?.["btool.stanza.scope"] || "";
-                const confName = rows[0]?.["btool.cmd.conf"] || rows[0]?.["btool.source"] || "";
+                // Extract conf file name from multiple possible fields or parse from _raw
+                let confName = rows[0]?.["btool.cmd.conf"] || rows[0]?.["btool.source"] || "";
+                if (!confName) {
+                  // Try to parse from _raw: /path/to/something.conf  key = value
+                  const rawMatch = (rows[0]?._raw || "").match(/\/([^/]+)\.conf\s/);
+                  if (rawMatch) confName = rawMatch[1];
+                }
+                // Also try parsing from the SPL command: | btool inputs list
+                if (!confName) {
+                  const splMatch = spl.match(/\|\s*btool\s+(\w+)\s+/);
+                  if (splMatch) confName = splMatch[1];
+                }
                 const confSpecUrl = confName
                   ? `https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/latest/configuration-file-reference/latest-configuration-file-reference/${confName}.conf`
                   : "";
