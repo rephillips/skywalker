@@ -99,6 +99,18 @@ function analyzeEfficiency(earliest: string, cron: string): Efficiency {
   return { timeWindowSec: tw, cronIntervalSec: ci, ratio, status: "critical", message: `${ratio.toFixed(1)}x — Heavy overlap: scanning ${(ratio - 1).toFixed(0)}x extra data` };
 }
 
+/** Detect inline earliest=/latest= in SPL that override dispatch times */
+function detectInlineTimeOverrides(spl: string): { earliest?: string; latest?: string } | null {
+  if (!spl) return null;
+  const overrides: { earliest?: string; latest?: string } = {};
+  const earliestMatch = spl.match(/\bearliest\s*=\s*("[^"]*"|'[^']*'|\S+)/i);
+  const latestMatch = spl.match(/\blatest\s*=\s*("[^"]*"|'[^']*'|\S+)/i);
+  if (earliestMatch) overrides.earliest = earliestMatch[1].replace(/["']/g, "");
+  if (latestMatch) overrides.latest = latestMatch[1].replace(/["']/g, "");
+  if (Object.keys(overrides).length === 0) return null;
+  return overrides;
+}
+
 const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -276,10 +288,17 @@ export function ScheduledSearchesPage() {
 
   // Compute efficiency for all rows
   const rowsWithEfficiency = useMemo(() => {
-    return results.map((r) => ({
-      ...r,
-      _efficiency: analyzeEfficiency(r["dispatch.earliest_time"] || "", r["cron_schedule"] || ""),
-    }));
+    return results.map((r) => {
+      const inlineOverrides = detectInlineTimeOverrides(r["search"] || "");
+      // Use inline earliest if it exists (it overrides dispatch.earliest_time)
+      const effectiveEarliest = inlineOverrides?.earliest || r["dispatch.earliest_time"] || "";
+      return {
+        ...r,
+        _inlineOverrides: inlineOverrides,
+        _effectiveEarliest: effectiveEarliest,
+        _efficiency: analyzeEfficiency(effectiveEarliest, r["cron_schedule"] || ""),
+      };
+    });
   }, [results]);
 
   const filtered = rowsWithEfficiency.filter((r) => {
@@ -502,6 +521,40 @@ export function ScheduledSearchesPage() {
                         )}
                         {columns.map((col) => {
                           const val = row[col.key] || "";
+                          const overrides = row._inlineOverrides;
+
+                          // Earliest column — show inline override warning
+                          if (col.key === "dispatch.earliest_time") {
+                            return (
+                              <td key={col.key} className="px-3 py-2">
+                                <div className="text-xs font-mono text-gray-300">{val || "—"}</div>
+                                {overrides?.earliest && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <AlertTriangle size={9} className="text-amber-400" />
+                                    <span className="text-[9px] text-amber-400">
+                                      Inline: earliest={overrides.earliest}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          }
+                          // Latest column — show inline override warning
+                          if (col.key === "dispatch.latest_time") {
+                            return (
+                              <td key={col.key} className="px-3 py-2">
+                                <div className="text-xs font-mono text-gray-300">{val || "—"}</div>
+                                {overrides?.latest && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <AlertTriangle size={9} className="text-amber-400" />
+                                    <span className="text-[9px] text-amber-400">
+                                      Inline: latest={overrides.latest}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          }
                           if (col.key === "actions" && val) {
                             return (
                               <td key={col.key} className="px-3 py-2">
