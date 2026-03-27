@@ -74,7 +74,10 @@ export function BtoolPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
+  const [excludePath, setExcludePath] = useState("/opt/splunk/etc/system/default/");
+  const [excludeEnabled, setExcludeEnabled] = useState(false);
   const [activeGroup, setActiveGroup] = useState("btool check");
+  const [collapsedStanzas, setCollapsedStanzas] = useState<Set<string>>(new Set());
 
   async function runCommand() {
     setLoading(true);
@@ -97,9 +100,37 @@ export function BtoolPage() {
 
   const lowerFilter = filterText.toLowerCase();
   const filtered = results.filter((r) => {
+    // Exclude path filter
+    if (excludeEnabled && excludePath) {
+      const raw = r._raw || "";
+      const allVals = Object.values(r).join(" ");
+      if (raw.includes(excludePath) || allVals.includes(excludePath)) {
+        // Only exclude if ALL lines in _raw are from the excluded path
+        const lines = raw.split("\n").filter((l: string) => l.trim());
+        const allExcluded = lines.length > 0 && lines.every((l: string) => l.includes(excludePath));
+        if (allExcluded) return false;
+      }
+    }
     if (!filterText) return true;
     return Object.values(r).some((v) => String(v).toLowerCase().includes(lowerFilter));
   });
+
+  // Group by stanza
+  const stanzaGroups = new Map<string, SplunkResult[]>();
+  filtered.forEach((r) => {
+    const stanza = r["btool.stanza"] || r["stanza"] || "No Stanza";
+    if (!stanzaGroups.has(stanza)) stanzaGroups.set(stanza, []);
+    stanzaGroups.get(stanza)!.push(r);
+  });
+
+  function toggleStanza(stanza: string) {
+    setCollapsedStanzas((prev) => {
+      const next = new Set(prev);
+      if (next.has(stanza)) next.delete(stanza);
+      else next.add(stanza);
+      return next;
+    });
+  }
 
   return (
     <div className="flex-1 flex flex-col">
@@ -174,56 +205,114 @@ export function BtoolPage() {
 
           {error && <div className="mb-4"><ErrorAlert message={error} /></div>}
 
-          {/* Summary */}
+          {/* Filters */}
           {results.length > 0 && (
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-gray-400">{results.length} results</span>
-              <div className="relative">
-                <Filter size={13} className="absolute left-2.5 top-2 text-gray-500" />
+            <div className="flex flex-col gap-2 mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">
+                  {filtered.length} of {results.length} results • {stanzaGroups.size} stanzas
+                </span>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Filter size={13} className="absolute left-2.5 top-2 text-gray-500" />
+                    <input
+                      type="text"
+                      value={filterText}
+                      onChange={(e) => setFilterText(e.target.value)}
+                      className="rounded-lg border border-surface-border bg-surface pl-8 pr-2 py-1.5 text-xs text-gray-100 outline-none focus:border-brand-500 w-52"
+                      placeholder="Filter results..."
+                    />
+                  </div>
+                  <button
+                    onClick={() => setCollapsedStanzas(new Set())}
+                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    Expand all
+                  </button>
+                  <button
+                    onClick={() => setCollapsedStanzas(new Set(stanzaGroups.keys()))}
+                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    Collapse all
+                  </button>
+                </div>
+              </div>
+              {/* Exclude path */}
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={excludeEnabled}
+                    onChange={(e) => setExcludeEnabled(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className="text-[10px] text-gray-400">Exclude path:</span>
+                </label>
                 <input
                   type="text"
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  className="rounded-lg border border-surface-border bg-surface pl-8 pr-2 py-1.5 text-xs text-gray-100 outline-none focus:border-brand-500 w-64"
-                  placeholder="Filter results..."
+                  value={excludePath}
+                  onChange={(e) => setExcludePath(e.target.value)}
+                  className="rounded-lg border border-surface-border bg-surface px-2 py-1 text-[10px] text-gray-300 font-mono outline-none focus:border-brand-500 w-72"
+                  placeholder="/opt/splunk/etc/system/default/"
                 />
               </div>
             </div>
           )}
 
-          {/* Results — vertical cards */}
-          {filtered.length > 0 && (
+          {/* Results — grouped by stanza */}
+          {stanzaGroups.size > 0 && (
             <div className="flex-1 min-h-0 overflow-auto flex flex-col gap-3">
-              {filtered.map((row, i) => (
-                <div key={i} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {columns.map((col) => {
-                        const val = row[col] || "";
-                        if (!val) return null;
-                        return (
-                          <tr key={col} className="border-b border-surface-border/30 hover:bg-surface-hover/50 transition-colors">
-                            <td className="px-3 py-1.5 text-[10px] font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap w-40 align-top">
-                              {col}
-                            </td>
-                            <td className="px-3 py-1.5 text-xs font-mono text-gray-300 break-all">
-                              {col === "message_type" && MESSAGE_COLORS[val] ? (
-                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${MESSAGE_COLORS[val]}`}>
-                                  {val}
-                                </span>
-                              ) : col === "_raw" ? (
-                                <pre className="whitespace-pre-wrap">{val}</pre>
-                              ) : (
-                                val
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+              {Array.from(stanzaGroups.entries()).map(([stanza, rows]) => {
+                const isCollapsed = collapsedStanzas.has(stanza);
+                const app = rows[0]?.["btool.stanza.app"] || rows[0]?.["btool.source"] || "";
+                const scope = rows[0]?.["btool.stanza.scope"] || "";
+                return (
+                  <div key={stanza} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+                    {/* Stanza header */}
+                    <button
+                      onClick={() => toggleStanza(stanza)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-hover transition-colors"
+                    >
+                      <code className="text-sm font-mono text-brand-400 font-semibold">[{stanza}]</code>
+                      <span className="text-[10px] text-gray-500">{rows.length} event{rows.length !== 1 && "s"}</span>
+                      {app && <span className="text-[10px] text-gray-600">app: {app}</span>}
+                      {scope && <span className="text-[10px] text-gray-600">scope: {scope}</span>}
+                      <span className="ml-auto text-[10px] text-gray-600">{isCollapsed ? "▶" : "▼"}</span>
+                    </button>
+                    {/* Stanza content */}
+                    {!isCollapsed && rows.map((row, ri) => (
+                      <div key={ri} className={rows.length > 1 ? "border-t border-surface-border/30" : ""}>
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {columns.filter((col) => col !== "btool.stanza").map((col) => {
+                              const val = row[col] || "";
+                              if (!val) return null;
+                              return (
+                                <tr key={col} className="border-b border-surface-border/20 hover:bg-surface-hover/30 transition-colors">
+                                  <td className="px-4 py-1 text-[10px] font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap w-44 align-top">
+                                    {col}
+                                  </td>
+                                  <td className="px-3 py-1 text-xs font-mono text-gray-300 break-all">
+                                    {col === "message_type" && MESSAGE_COLORS[val] ? (
+                                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${MESSAGE_COLORS[val]}`}>
+                                        {val}
+                                      </span>
+                                    ) : col === "_raw" ? (
+                                      <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">{val}</pre>
+                                    ) : (
+                                      val
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
 
