@@ -724,7 +724,178 @@ export function ScheduledSearchesPage() {
             </div>
           </div>
         )}
+
+        {/* Scheduled Search Inefficiency Audit */}
+        <AuditInefficiency />
       </div>
+    </div>
+  );
+}
+
+// ─── Audit: Scheduled Search Inefficiency via _audit ──────────────
+const AUDIT_SPL = `index=_audit sourcetype=audittrail source=audittrail
+| fields _time, host, savedsearch_name, action, info, search_et, search_lt, search, search_id, user, total_run_time
+| search savedsearch_name!="" TERM(action=search) ( TERM(info=completed) OR ( TERM(info=granted) search_et=* "search='search")) NOT "search_id='rsa_*"
+| eval timesearched = round((search_lt-search_et),0)
+| fields savedsearch_name, timesearched, user
+| join savedsearch_name
+    [| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0"
+    | fields title, cron_schedule, eai:acl.app
+    | rename title as savedsearch_name
+    | eval pieces=split(cron_schedule, " ")
+    | eval c_min=mvindex(pieces, 0), c_h=mvindex(pieces, 1), c_d=mvindex(pieces, 2), c_mday=mvindex(pieces, 3), c_wday=mvindex(pieces, 4)
+    | eval c_min_div=if(match(c_min, "/"), replace(c_min, "^.*/(\\\d+)$", "\\\1"), null())
+    | eval c_mins=if(match(c_min, ","), split(c_min, ","), null())
+    | eval c_min_div=if(isnotnull(c_mins), abs(tonumber(mvindex(c_mins, 1)) - tonumber(mvindex(c_mins, 0))), c_min_div)
+    | eval c_hs=if(match(c_h, ","), split(c_h, ","), null())
+    | eval c_h_div=case(match(c_h, "/"), replace(c_h, "^.*/(\\\d+)$", "\\\1"), isnotnull(c_hs), abs(tonumber(mvindex(c_hs, 1)) - tonumber(mvindex(c_hs, 0))), 1=1, null())
+    | eval c_wdays=if(match(c_wday, ","), split(c_wday, ","), null())
+    | eval c_wday_div=case(match(c_wday, "/"), replace(c_wday, "^.*/(\\\d+)$", "\\\1"), isnotnull(c_wdays), abs(tonumber(mvindex(c_wdays, 1)) - tonumber(mvindex(c_wdays, 0))), 1=1, null())
+    | eval i_m=case(c_d < 29, 86400 * 28, c_d = 31, 86400 * 31, 1=1, null())
+    | eval i_h=case(isnotnull(c_h_div), c_h_div * 3600, c_h = "*", null(), match(c_h, "^\\\d+$"), 86400)
+    | eval i_min=case(isnotnull(c_min_div), c_min_div * 60, c_min = "*", 60, match(c_min, "^\\\d+$"), 3600)
+    | eval i_wk=case(isnotnull(c_wday_div), c_wday_div * 86400, c_wday = "*", null(), match(c_wday, "^\\\d+$"), 604800)
+    | eval cron_minimum_freq=case(isnotnull(i_m), i_m, isnotnull(i_wk) AND isnotnull(c_min_div), i_min, isnotnull(i_wk) AND isnull(c_min_div), i_wk, isnotnull(i_h), i_h, 1=1, min(i_min))
+    | fields - c_d c_h c_hs c_h_div c_mday c_min c_min_div c_mins c_wday c_wdays c_wday_div pieces i_m i_min i_h i_wk
+    | fields savedsearch_name cron_minimum_freq cron_schedule eai:acl.app]
+| eval magic=cron_minimum_freq*3
+| where timesearched>magic
+| eval ratio=round(timesearched/cron_minimum_freq,0) . ":" . 1, timesearched=round(timesearched/60,0), cron_minimum_freq=cron_minimum_freq/60
+| dedup savedsearch_name
+| table savedsearch_name, eai:acl.app, user, timesearched, cron_minimum_freq, cron_schedule, ratio
+| rename savedsearch_name AS "Saved Search Name", eai:acl.app AS "App", user AS "User", timesearched AS "Time Searched (Minutes)", cron_minimum_freq AS "Minimum Frequency (Minutes)", cron_schedule AS "Cron Schedule", ratio AS Ratio
+| sort -Ratio`;
+
+function AuditInefficiency() {
+  const [results, setResults] = useState<SplunkResult[]>([]);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showSpl, setShowSpl] = useState(false);
+  const [customSpl, setCustomSpl] = useState(AUDIT_SPL);
+  const [editingSpl, setEditingSpl] = useState(false);
+
+  async function runAudit(spl?: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.search(spl || customSpl, "-24h", "now");
+      setResults(res.results || []);
+      if (res.results?.length > 0) {
+        setColumns(Object.keys(res.results[0]).filter((k) => !k.startsWith("_")));
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Zap size={16} className="text-amber-400" />
+            Scheduled Search Inefficiency Audit
+          </h2>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            Finds searches where the actual time scanned is &gt;3x the cron frequency (from _audit index)
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSpl(!showSpl)}
+            className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
+          >
+            {showSpl ? "Hide SPL" : "Show SPL"}
+          </button>
+          <button
+            onClick={() => runAudit()}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
+            Run Audit
+          </button>
+        </div>
+      </div>
+
+      {/* SPL display */}
+      {showSpl && (
+        <div className="rounded-xl border border-surface-border bg-surface-raised p-3 mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Audit SPL Query</span>
+            <button
+              onClick={() => setEditingSpl(!editingSpl)}
+              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
+            >
+              {editingSpl ? "Cancel" : "Edit"}
+            </button>
+          </div>
+          {editingSpl ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={customSpl}
+                onChange={(e) => setCustomSpl(e.target.value)}
+                rows={15}
+                className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[10px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y"
+                spellCheck={false}
+              />
+              <button
+                onClick={() => { runAudit(); setEditingSpl(false); }}
+                className="self-start rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors"
+              >
+                Run
+              </button>
+            </div>
+          ) : (
+            <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-60 overflow-auto">{customSpl}</pre>
+          )}
+        </div>
+      )}
+
+      {error && <div className="mb-4"><ErrorAlert message={error} /></div>}
+
+      {/* Results */}
+      {results.length > 0 && (
+        <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+          <div className="overflow-auto max-h-96">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-surface-raised z-10">
+                <tr className="border-b border-surface-border">
+                  {columns.map((col) => (
+                    <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((row, i) => (
+                  <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
+                    {columns.map((col) => (
+                      <td key={col} className="px-3 py-2 text-xs font-mono text-gray-300 max-w-xs truncate" title={row[col]}>
+                        {col === "Ratio" ? (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-red-500/15 text-red-400">
+                            {row[col]}
+                          </span>
+                        ) : row[col]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && results.length === 0 && (
+        <div className="rounded-xl border border-surface-border bg-surface-raised p-6 text-center">
+          <p className="text-xs text-gray-500">Click "Run Audit" to find inefficient scheduled searches from the _audit index</p>
+        </div>
+      )}
     </div>
   );
 }
