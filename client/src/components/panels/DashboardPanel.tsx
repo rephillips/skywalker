@@ -116,7 +116,7 @@ export function DashboardPanel({ config, onRemove, onUpdate, dragHandleProps }: 
     <div
       ref={containerRef}
       className="relative rounded-xl border border-surface-border bg-surface-raised p-4 flex flex-col"
-      style={{ height, width: width ?? "100%" }}
+      style={{ minHeight: height, width: width ?? "100%" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2 shrink-0">
