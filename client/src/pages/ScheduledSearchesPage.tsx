@@ -183,10 +183,34 @@ export function ScheduledSearchesPage() {
     setLoading(true);
     setError(null);
     try {
-      // Append unique comment so Splunk creates a brand new search job
-      const uniqueSpl = `${query || spl} | eval _t=${Date.now()} | fields - _t`;
-      const res = await api.search(uniqueSpl);
-      setResults(res.results || []);
+      if (!query && !editSpl) {
+        // Use direct REST proxy instead of | rest SPL to avoid caching
+        const endpoint = showDisabled
+          ? "saved/searches?count=0&search=is_scheduled%3D1"
+          : "saved/searches?count=0&search=is_scheduled%3D1%20AND%20disabled%3D0";
+        const res = await api.proxy(endpoint);
+        if (res.status === "ok" && res.data?.entry) {
+          const parsed: SplunkResult[] = res.data.entry.map((entry: any) => ({
+            title: entry.name || "",
+            cron_schedule: entry.content?.cron_schedule || "",
+            "dispatch.earliest_time": entry.content?.["dispatch.earliest_time"] || "",
+            "dispatch.latest_time": entry.content?.["dispatch.latest_time"] || "",
+            "eai:acl.app": entry.acl?.app || "",
+            "eai:acl.owner": entry.acl?.owner || "",
+            "eai:acl.sharing": entry.acl?.sharing || "",
+            next_scheduled_time: entry.content?.next_scheduled_time || "",
+            actions: entry.content?.actions || "",
+            disabled: String(entry.content?.disabled || "0"),
+            search: entry.content?.search || "",
+          }));
+          setResults(parsed);
+        }
+      } else {
+        // Custom SPL query
+        const uniqueSpl = `${query || spl} | eval _t=${Date.now()} | fields - _t`;
+        const res = await api.search(uniqueSpl);
+        setResults(res.results || []);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
