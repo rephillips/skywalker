@@ -40,6 +40,14 @@ export const api = {
     return request<any>(`/search/${encodeURIComponent(sid)}/dispatch-tar`);
   },
 
+  updateSavedSearch(name: string, app: string, owner: string, updates: Record<string, string>) {
+    return request<{ status: string; message: string }>("/saved-search/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, app, owner, updates }),
+    });
+  },
+
   proxy(path: string, method = "GET", body?: string) {
     return request<{ status: string; data?: any; message?: string }>("/proxy", {
       method: "POST",

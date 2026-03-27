@@ -47,6 +47,36 @@ router.post("/config/test", async (_req, res) => {
   }
 });
 
+// Update a saved search (cron, earliest, latest)
+router.post("/saved-search/update", async (req, res) => {
+  try {
+    const { name, app, owner, updates } = req.body;
+    if (!name) {
+      res.status(400).json({ error: "name is required" });
+      return;
+    }
+
+    const ownerPath = owner || "-";
+    const appPath = app || "-";
+    const body = new URLSearchParams();
+    if (updates.cron_schedule) body.set("cron_schedule", updates.cron_schedule);
+    if (updates["dispatch.earliest_time"]) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
+    if (updates["dispatch.latest_time"]) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
+
+    const url = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
+
+    const data = await splunkFetch(url, {
+      method: "POST",
+      body: body.toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+
+    res.json({ status: "ok", message: `Updated ${name}`, data: data?.entry?.[0]?.content });
+  } catch (err) {
+    res.json({ status: "error", message: (err as Error).message });
+  }
+});
+
 // Proxy any Splunk REST endpoint for testing from the Docs page
 router.post("/proxy", async (req, res) => {
   try {

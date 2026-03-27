@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap } from "lucide-react";
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -116,6 +116,12 @@ export function ScheduledSearchesPage() {
   const [spl, setSpl] = useState(ENABLED_SPL);
   const [editSpl, setEditSpl] = useState(false);
   const [customSpl, setCustomSpl] = useState(ENABLED_SPL);
+  const [fixingRow, setFixingRow] = useState<number | null>(null);
+  const [fixCron, setFixCron] = useState("");
+  const [fixEarliest, setFixEarliest] = useState("");
+  const [fixLatest, setFixLatest] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ type: string; text: string } | null>(null);
 
   async function fetchScheduled(query?: string) {
     setLoading(true);
@@ -138,6 +144,50 @@ export function ScheduledSearchesPage() {
     const newSpl = next ? ALL_SPL : ENABLED_SPL;
     setSpl(newSpl);
     setCustomSpl(newSpl);
+  }
+
+  function startFix(index: number, row: SplunkResult) {
+    setFixingRow(index);
+    setFixCron(row["cron_schedule"] || "");
+    setFixEarliest(row["dispatch.earliest_time"] || "");
+    setFixLatest(row["dispatch.latest_time"] || "");
+    setSaveMsg(null);
+  }
+
+  async function applyFix(row: SplunkResult) {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const updates: Record<string, string> = {};
+      if (fixCron !== (row["cron_schedule"] || "")) updates["cron_schedule"] = fixCron;
+      if (fixEarliest !== (row["dispatch.earliest_time"] || "")) updates["dispatch.earliest_time"] = fixEarliest;
+      if (fixLatest !== (row["dispatch.latest_time"] || "")) updates["dispatch.latest_time"] = fixLatest;
+
+      if (Object.keys(updates).length === 0) {
+        setSaveMsg({ type: "warning", text: "No changes to save" });
+        setSaving(false);
+        return;
+      }
+
+      const res = await api.updateSavedSearch(
+        row["title"] || "",
+        row["eai:acl.app"] || "-",
+        row["eai:acl.owner"] || "-",
+        updates
+      );
+
+      if (res.status === "ok") {
+        setSaveMsg({ type: "ok", text: `Updated: ${Object.keys(updates).join(", ")}` });
+        // Refresh the table after a short delay
+        setTimeout(() => { fetchScheduled(); setFixingRow(null); setSaveMsg(null); }, 1500);
+      } else {
+        setSaveMsg({ type: "error", text: res.message });
+      }
+    } catch (err) {
+      setSaveMsg({ type: "error", text: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const lowerFilter = filter.toLowerCase();
@@ -348,10 +398,18 @@ export function ScheduledSearchesPage() {
                                 </span>
                                 <span className="text-[9px] text-gray-500">
                                   {eff.timeWindowSec !== null && eff.cronIntervalSec !== null
-                                    ? `${formatSeconds(eff.timeWindowSec)} window / ${formatSeconds(eff.cronIntervalSec)} interval`
+                                    ? `${formatSeconds(eff.timeWindowSec)} / ${formatSeconds(eff.cronIntervalSec)}`
                                     : eff.message}
                                 </span>
                               </div>
+                              {(eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); startFix(i, row); }}
+                                  className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                                >
+                                  <Wrench size={9} /> Fix
+                                </button>
+                              )}
                             </div>
                           </td>
                         )}
@@ -389,6 +447,82 @@ export function ScheduledSearchesPage() {
                           );
                         })}
                       </tr>
+                      {fixingRow === i && showEfficiency && (
+                        <tr className="bg-surface">
+                          <td colSpan={columns.length + 1} className="px-4 py-3">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-1 text-[10px] font-medium text-white">
+                                <Wrench size={10} /> Fix: {row.title}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-gray-500">Cron:</span>
+                                  <input
+                                    value={fixCron}
+                                    onChange={(e) => setFixCron(e.target.value)}
+                                    className="w-32 rounded border border-surface-border bg-surface-raised px-2 py-1 text-[11px] font-mono text-gray-200 outline-none focus:border-brand-500"
+                                  />
+                                </label>
+                                <label className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-gray-500">Earliest:</span>
+                                  <input
+                                    value={fixEarliest}
+                                    onChange={(e) => setFixEarliest(e.target.value)}
+                                    className="w-20 rounded border border-surface-border bg-surface-raised px-2 py-1 text-[11px] font-mono text-gray-200 outline-none focus:border-brand-500"
+                                  />
+                                </label>
+                                <label className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-gray-500">Latest:</span>
+                                  <input
+                                    value={fixLatest}
+                                    onChange={(e) => setFixLatest(e.target.value)}
+                                    className="w-20 rounded border border-surface-border bg-surface-raised px-2 py-1 text-[11px] font-mono text-gray-200 outline-none focus:border-brand-500"
+                                  />
+                                </label>
+                                {/* Preview new efficiency */}
+                                {(() => {
+                                  const preview = analyzeEfficiency(fixEarliest, fixCron);
+                                  return (
+                                    <span className={clsx("text-[10px] font-mono", {
+                                      "text-emerald-400": preview.status === "ok",
+                                      "text-amber-400": preview.status === "warning",
+                                      "text-red-400": preview.status === "critical",
+                                      "text-gray-500": preview.status === "unknown",
+                                    })}>
+                                      → {preview.ratio !== null ? `${preview.ratio.toFixed(1)}x` : "?"}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => applyFix(row)}
+                                  disabled={saving}
+                                  className="flex items-center gap-1 rounded bg-brand-500 px-3 py-1 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
+                                >
+                                  {saving ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+                                  Push Update to Splunk
+                                </button>
+                                <button
+                                  onClick={() => { setFixingRow(null); setSaveMsg(null); }}
+                                  className="flex items-center gap-1 rounded border border-surface-border px-3 py-1 text-[10px] text-gray-400 hover:text-gray-200 transition-colors"
+                                >
+                                  <X size={10} /> Cancel
+                                </button>
+                                {saveMsg && (
+                                  <span className={clsx("text-[10px]", {
+                                    "text-emerald-400": saveMsg.type === "ok",
+                                    "text-amber-400": saveMsg.type === "warning",
+                                    "text-red-400": saveMsg.type === "error",
+                                  })}>
+                                    {saveMsg.text}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     );
                   })}
                 </tbody>
