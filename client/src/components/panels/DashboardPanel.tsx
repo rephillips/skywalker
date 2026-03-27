@@ -374,6 +374,7 @@ function SidFooter({ sid }: { sid: string }) {
   const [showInspector, setShowInspector] = useState(false);
   const [log, setLog] = useState<string | null>(null);
   const [loadingLog, setLoadingLog] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [webUrl, setWebUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -395,6 +396,25 @@ function SidFooter({ sid }: { sid: string }) {
     }
   }
 
+  async function downloadDispatch() {
+    setDownloading(true);
+    try {
+      const data = await api.dispatch(sid);
+      // Create a zip-like bundle as individual file downloads in a JSON wrapper
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dispatch_${sid}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Download failed: ${(err as Error).message}`);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const inspectorUrl = webUrl ? `${webUrl}/en-US/app/search/job_inspector?sid=${encodeURIComponent(sid)}` : null;
 
   return (
@@ -412,6 +432,13 @@ function SidFooter({ sid }: { sid: string }) {
           className="text-brand-400 hover:text-brand-50 transition-colors"
         >
           {showLog ? "Hide Log" : "search.log"}
+        </button>
+        <button
+          onClick={downloadDispatch}
+          disabled={downloading}
+          className="text-brand-400 hover:text-brand-50 transition-colors"
+        >
+          {downloading ? "Downloading..." : "Download Dispatch"}
         </button>
         {inspectorUrl && (
           <a

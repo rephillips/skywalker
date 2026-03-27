@@ -75,4 +75,88 @@ router.get("/search/:sid/log", async (req, res, next) => {
   }
 });
 
+// Get dispatch directory listing for a job
+router.get("/search/:sid/dispatch", async (req, res, next) => {
+  try {
+    const sid = req.params.sid;
+    const { splunkFetch, splunkFetchRaw } = await import("../services/splunkService.js");
+
+    // Get job metadata which includes dispatch dir info
+    const jobData = await splunkFetch(
+      `/services/search/v2/jobs/${encodeURIComponent(sid)}?output_mode=json`
+    );
+    const content = jobData?.entry?.[0]?.content || {};
+
+    // Collect available artifacts
+    const artifacts: { name: string; content: string }[] = [];
+
+    // search.log
+    try {
+      const log = await splunkFetchRaw(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/search.log`
+      );
+      artifacts.push({ name: "search.log", content: log });
+    } catch {}
+
+    // Job info as JSON
+    artifacts.push({
+      name: "job_info.json",
+      content: JSON.stringify(content, null, 2),
+    });
+
+    // Results
+    try {
+      const results = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/results?output_mode=json&count=0`
+      );
+      artifacts.push({
+        name: "results.json",
+        content: JSON.stringify(results, null, 2),
+      });
+    } catch {}
+
+    // Events
+    try {
+      const events = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/events?output_mode=json&count=100`
+      );
+      artifacts.push({
+        name: "events.json",
+        content: JSON.stringify(events, null, 2),
+      });
+    } catch {}
+
+    // Timeline
+    try {
+      const timeline = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/timeline?output_mode=json`
+      );
+      artifacts.push({
+        name: "timeline.json",
+        content: JSON.stringify(timeline, null, 2),
+      });
+    } catch {}
+
+    // Summary
+    try {
+      const summary = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/summary?output_mode=json`
+      );
+      artifacts.push({
+        name: "summary.json",
+        content: JSON.stringify(summary, null, 2),
+      });
+    } catch {}
+
+    res.json({
+      sid,
+      dispatchDir: `$SPLUNK_HOME/var/run/splunk/dispatch/${sid}`,
+      artifactCount: artifacts.length,
+      artifacts,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

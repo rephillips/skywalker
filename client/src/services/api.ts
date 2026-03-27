@@ -32,6 +32,10 @@ export const api = {
     return request<any>(`/search/${encodeURIComponent(sid)}/log`);
   },
 
+  dispatch(sid: string) {
+    return request<any>(`/search/${encodeURIComponent(sid)}/dispatch`);
+  },
+
   proxy(path: string, method = "GET", body?: string) {
     return request<{ status: string; data?: any; message?: string }>("/proxy", {
       method: "POST",
