@@ -31,6 +31,21 @@ export async function splunkFetch(path: string, options?: RequestInit): Promise<
   return res.json();
 }
 
+/** Fetch raw text from Splunk (for search.log etc.) */
+export async function splunkFetchRaw(path: string): Promise<string> {
+  const url = `${config.splunk.baseUrl}${path}`;
+  const res = await fetch(url, {
+    // @ts-expect-error undici dispatcher for TLS bypass
+    dispatcher: tlsAgent,
+    headers: { Authorization: authHeader() },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Splunk API ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.text();
+}
+
 export async function createSearchJob(
   spl: string,
   earliest?: string,

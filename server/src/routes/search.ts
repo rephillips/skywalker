@@ -65,22 +65,13 @@ router.get("/search/:sid/results", async (req, res, next) => {
 // Get search.log for a job
 router.get("/search/:sid/log", async (req, res, next) => {
   try {
-    const { splunkFetch } = await import("../services/splunkService.js");
-    const data = await splunkFetch(
-      `/services/search/v2/jobs/${encodeURIComponent(req.params.sid)}/search.log?output_mode=json`
+    const { splunkFetchRaw } = await import("../services/splunkService.js");
+    const text = await splunkFetchRaw(
+      `/services/search/v2/jobs/${encodeURIComponent(req.params.sid)}/search.log`
     );
-    res.json(data);
+    res.json({ log: text });
   } catch (err) {
-    // search.log might not be JSON, try raw
-    try {
-      const { splunkFetch } = await import("../services/splunkService.js");
-      const data = await splunkFetch(
-        `/services/search/v2/jobs/${encodeURIComponent(req.params.sid)}/search.log`
-      );
-      res.json({ log: typeof data === "string" ? data : JSON.stringify(data) });
-    } catch (err2) {
-      next(err2);
-    }
+    next(err);
   }
 });
 
