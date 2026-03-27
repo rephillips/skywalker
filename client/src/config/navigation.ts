@@ -10,6 +10,8 @@ import {
   MonitorCog,
   Package,
   FileText,
+  ClipboardCheck,
+  CalendarClock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +35,13 @@ export const navigation: NavItem[] = [
   },
   { label: "System Info", icon: MonitorCog, path: "/system-info" },
   { label: "Knowledge", icon: Package, path: "/knowledge" },
+  {
+    label: "Audits",
+    icon: ClipboardCheck,
+    children: [
+      { label: "Scheduled Searches", icon: CalendarClock, path: "/audits/scheduled-searches" },
+    ],
+  },
   { label: "Security", icon: Shield, path: "/security" },
   { label: "Conf Files", icon: FileText, path: "/conf-reference" },
   { label: "API Docs", icon: BookOpen, path: "/docs" },

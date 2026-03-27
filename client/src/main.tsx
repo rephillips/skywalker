@@ -10,6 +10,7 @@ import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { SystemInfoPage } from "./pages/SystemInfoPage";
 import { KnowledgeBundlePage } from "./pages/KnowledgeBundlePage";
 import { ConfReferencePage } from "./pages/ConfReferencePage";
+import { ScheduledSearchesPage } from "./pages/ScheduledSearchesPage";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
       { path: "system-info", element: <SystemInfoPage /> },
       { path: "knowledge", element: <KnowledgeBundlePage /> },
       { path: "conf-reference", element: <ConfReferencePage /> },
+      { path: "audits/scheduled-searches", element: <ScheduledSearchesPage /> },
       { path: "monitoring/:section", element: <PlaceholderPage /> },
       { path: "security", element: <PlaceholderPage /> },
     ],
