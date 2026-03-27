@@ -36,6 +36,10 @@ export const api = {
     return request<any>(`/search/${encodeURIComponent(sid)}/dispatch`);
   },
 
+  dispatchFull(sid: string) {
+    return request<any>(`/search/${encodeURIComponent(sid)}/dispatch-tar`);
+  },
+
   proxy(path: string, method = "GET", body?: string) {
     return request<{ status: string; data?: any; message?: string }>("/proxy", {
       method: "POST",

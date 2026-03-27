@@ -399,15 +399,26 @@ function SidFooter({ sid }: { sid: string }) {
   async function downloadDispatch() {
     setDownloading(true);
     try {
-      const data = await api.dispatch(sid);
-      // Create a zip-like bundle as individual file downloads in a JSON wrapper
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dispatch_${sid}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const data = await api.dispatchFull(sid);
+
+      // Download each file individually
+      const files = data.files || {};
+      for (const [name, content] of Object.entries(files)) {
+        if (!content) continue;
+        const blob = new Blob([content as string], {
+          type: name.endsWith(".json") ? "application/json"
+            : name.endsWith(".csv") ? "text/csv"
+            : "text/plain",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${sid}_${name}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        // Small delay between downloads so browser doesn't block them
+        await new Promise((r) => setTimeout(r, 200));
+      }
     } catch (err) {
       alert(`Download failed: ${(err as Error).message}`);
     } finally {

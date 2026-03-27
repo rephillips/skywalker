@@ -159,4 +159,83 @@ router.get("/search/:sid/dispatch", async (req, res, next) => {
   }
 });
 
+// Package and download full dispatch directory via SPL
+router.get("/search/:sid/dispatch-tar", async (req, res, next) => {
+  try {
+    const sid = req.params.sid;
+    const { executeSearch, splunkFetch } = await import("../services/splunkService.js");
+
+    // Use SPL to tar the dispatch directory on the Splunk server
+    const tarSpl = `| makeresults | eval dispatch_dir="$SPLUNK_HOME/var/run/splunk/dispatch/${sid}" | eval cmd="tar -czf /tmp/dispatch_${sid}.tar.gz -C $SPLUNK_HOME/var/run/splunk/dispatch/ ${sid} 2>&1 && echo SUCCESS || echo FAILED" | map search="| script bash \\\"$$cmd\\\"" maxsearches=1`;
+
+    // Alternative approach: list files via | rest and get what we can
+    // First try to get dispatch info with file listing
+    const listSpl = `| rest splunk_server=local /services/search/v2/jobs/${sid} | fields sid, dispatchState, runDuration, scanCount, resultCount, eventCount, diskUsage, search, performance, messages`;
+
+    const jobData = await executeSearch(listSpl);
+
+    // Also get the full results with count=0 (all results)
+    const results = await splunkFetch(
+      `/services/search/v2/jobs/${encodeURIComponent(sid)}/results?output_mode=csv&count=0`
+    );
+
+    // Get search.log
+    let searchLog = "";
+    try {
+      const { splunkFetchRaw } = await import("../services/splunkService.js");
+      searchLog = await splunkFetchRaw(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/search.log`
+      );
+    } catch {}
+
+    // Get events as CSV
+    let eventsCsv = "";
+    try {
+      const { splunkFetchRaw } = await import("../services/splunkService.js");
+      eventsCsv = await splunkFetchRaw(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/events?output_mode=csv&count=0`
+      );
+    } catch {}
+
+    // Get job info JSON
+    const jobInfo = await splunkFetch(
+      `/services/search/v2/jobs/${encodeURIComponent(sid)}?output_mode=json`
+    );
+
+    // Get timeline
+    let timeline = null;
+    try {
+      timeline = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/timeline?output_mode=json`
+      );
+    } catch {}
+
+    // Get summary
+    let summary = null;
+    try {
+      summary = await splunkFetch(
+        `/services/search/v2/jobs/${encodeURIComponent(sid)}/summary?output_mode=json`
+      );
+    } catch {}
+
+    // Return as a structured bundle with CSV for easy import
+    res.json({
+      sid,
+      dispatchDir: `$SPLUNK_HOME/var/run/splunk/dispatch/${sid}`,
+      note: "Full dispatch directory requires filesystem access. This bundle contains all data available via REST API.",
+      files: {
+        "search.log": searchLog,
+        "job_info.json": JSON.stringify(jobInfo?.entry?.[0]?.content || {}, null, 2),
+        "results.csv": typeof results === "string" ? results : JSON.stringify(results),
+        "events.csv": eventsCsv,
+        "timeline.json": timeline ? JSON.stringify(timeline, null, 2) : null,
+        "summary.json": summary ? JSON.stringify(summary, null, 2) : null,
+        "job_rest_output.json": JSON.stringify(jobData, null, 2),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
