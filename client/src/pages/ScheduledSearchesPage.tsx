@@ -182,7 +182,9 @@ export function ScheduledSearchesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.search(query || spl);
+      // Append a comment with timestamp to bust Splunk's search cache
+      const cacheBust = ` | eval _cache_bust="${Date.now()}" | fields - _cache_bust`;
+      const res = await api.search((query || spl) + cacheBust);
       setResults(res.results || []);
     } catch (err) {
       setError((err as Error).message);
