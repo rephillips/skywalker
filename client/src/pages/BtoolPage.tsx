@@ -145,7 +145,7 @@ export function BtoolPage() {
         </div>
 
         {/* Right content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-hidden p-6 flex flex-col min-w-0">
           {/* SPL input */}
           <div className="rounded-xl border border-surface-border bg-surface-raised p-3 mb-4">
             <div className="flex gap-2">
@@ -193,9 +193,9 @@ export function BtoolPage() {
 
           {/* Results table */}
           {filtered.length > 0 && (
-            <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
-              <div className="overflow-auto max-h-[calc(100vh-300px)]">
-                <table className="w-full text-sm">
+            <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden flex-1 min-h-0">
+              <div className="overflow-auto h-full">
+                <table className="text-sm">
                   <thead className="sticky top-0 bg-surface-raised z-10">
                     <tr className="border-b border-surface-border">
                       {columns.map((col) => (
