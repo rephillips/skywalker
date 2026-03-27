@@ -64,9 +64,11 @@ router.post("/saved-search/update", async (req, res) => {
     const currentContent = current?.entry?.[0]?.content || {};
 
     const body = new URLSearchParams();
-    // Preserve current scheduling state
-    body.set("is_scheduled", currentContent.is_scheduled ?? "1");
-    body.set("disabled", currentContent.disabled ?? "0");
+    // Preserve current scheduling state — normalize booleans to Splunk's expected "1"/"0"
+    const isScheduled = currentContent.is_scheduled === true || currentContent.is_scheduled === "1" || currentContent.is_scheduled === 1;
+    const isDisabled = currentContent.disabled === true || currentContent.disabled === "1" || currentContent.disabled === 1;
+    body.set("is_scheduled", isScheduled ? "1" : "0");
+    body.set("disabled", isDisabled ? "1" : "0");
     // Preserve the search itself
     if (currentContent.search) body.set("search", currentContent.search);
 
