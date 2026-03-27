@@ -284,7 +284,7 @@ export function BtoolPage() {
                   ? `https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/latest/configuration-file-reference/latest-configuration-file-reference/${confName}.conf`
                   : "";
                 return (
-                  <div key={stanza} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+                  <div key={stanza} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden min-w-0">
                     {/* Stanza header */}
                     <div className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors">
                       <button
@@ -315,8 +315,8 @@ export function BtoolPage() {
                     </div>
                     {/* Stanza content — just the raw btool output */}
                     {!isCollapsed && (
-                      <div className="px-4 py-2 border-t border-surface-border/30">
-                        <pre className="text-[11px] font-mono text-gray-300 leading-relaxed whitespace-pre-wrap">{
+                      <div className="px-4 py-2 border-t border-surface-border/30 overflow-hidden">
+                        <pre className="text-[11px] font-mono text-gray-300 leading-relaxed whitespace-pre-wrap break-all">{
                           rows.map((row) => {
                             const raw = row._raw || "";
                             return raw.split("\n")
