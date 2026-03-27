@@ -805,10 +805,17 @@ function AuditInefficiency() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => { setShowSpl(true); setEditingSpl(true); }}
+            className="flex items-center gap-1 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors"
+          >
+            <Wrench size={11} />
+            Edit Search
+          </button>
+          <button
             onClick={() => setShowSpl(!showSpl)}
             className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
           >
-            {showSpl ? "Hide SPL" : "Show SPL"}
+            {showSpl ? "Hide SPL" : "View SPL"}
           </button>
           <button
             onClick={() => runAudit()}
