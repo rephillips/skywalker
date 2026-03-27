@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { TopBar } from "../components/layout/TopBar";
-import { CheckCircle, XCircle, Loader2, Plug, Info } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Plug, Info, Shield, AlertTriangle } from "lucide-react";
 
 interface SplunkConfig {
   baseUrl: string;
+  webUrl: string;
   username: string;
   hasPassword: boolean;
   hasToken: boolean;
@@ -11,10 +12,7 @@ interface SplunkConfig {
 }
 
 export function SettingsPage() {
-  const [baseUrl, setBaseUrl] = useState("");
-  const [authMode, setAuthMode] = useState<"basic" | "token">("basic");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [baseUrl, setBaseUrl] = useState("https://127.0.0.1:8089");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -27,35 +25,27 @@ export function SettingsPage() {
       .then((r) => r.json())
       .then((cfg: SplunkConfig) => {
         setBaseUrl(cfg.baseUrl);
-        setUsername(cfg.username);
-        setAuthMode(cfg.authMode);
         setEnvConfig(cfg);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);
 
-  async function handleSave() {
+  async function handleConnect() {
+    if (!token.trim()) {
+      setMessage({ type: "error", text: "Enter an API token" });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     try {
-      const body: Record<string, string> = { baseUrl };
-      if (authMode === "token") {
-        body.token = token;
-        body.password = "";
-      } else {
-        body.username = username;
-        body.password = password;
-        body.token = "";
-      }
       const res = await fetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ baseUrl, token }),
       });
       const data = await res.json();
       setMessage({ type: data.status, text: data.message });
-      // Refresh config state
       const updated = await fetch("/api/config").then((r) => r.json());
       setEnvConfig(updated);
     } catch (err) {
@@ -83,137 +73,106 @@ export function SettingsPage() {
     }
   }
 
+  async function handleDisconnect() {
+    try {
+      await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, token: "" }),
+      });
+      setToken("");
+      const updated = await fetch("/api/config").then((r) => r.json());
+      setEnvConfig(updated);
+      setMessage({ type: "ok", text: "Token cleared from memory" });
+    } catch (err) {
+      setMessage({ type: "error", text: (err as Error).message });
+    }
+  }
+
   if (!loaded) return null;
+
+  const isConnected = envConfig?.hasToken || envConfig?.hasPassword;
 
   return (
     <div className="flex-1 flex flex-col">
       <TopBar title="Settings" />
       <div className="p-6 max-w-2xl">
-        {/* Current connection status */}
-        {envConfig && (
-          <div className="rounded-xl border border-surface-border bg-surface-raised p-4 mb-4">
-            <div className="flex items-start gap-3">
-              <Info size={16} className="shrink-0 text-brand-400 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-medium text-white mb-2">Active Connection</p>
-                <div className="flex flex-col gap-1 text-xs">
-                  <div className="flex gap-2">
-                    <span className="text-gray-500 w-20">URL</span>
-                    <code className="text-gray-300 font-mono">{envConfig.baseUrl}</code>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-gray-500 w-20">Auth</span>
-                    <span className="text-gray-300">
-                      {envConfig.authMode === "token" ? (
-                        <>API Token <span className="text-emerald-400">configured</span></>
-                      ) : (
-                        <>
-                          Username: <code className="font-mono">{envConfig.username}</code>
-                          {envConfig.hasPassword ? (
-                            <span className="text-emerald-400 ml-2">password set</span>
-                          ) : (
-                            <span className="text-amber-400 ml-2">no password</span>
-                          )}
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="text-gray-500 w-20">Source</span>
-                    <span className="text-gray-400">Loaded from .env file</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
+        {/* Connection status */}
+        <div className={`rounded-xl border p-4 mb-6 ${
+          isConnected
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-amber-500/30 bg-amber-500/5"
+        }`}>
+          <div className="flex items-start gap-3">
+            {isConnected ? (
+              <CheckCircle size={18} className="shrink-0 text-emerald-400 mt-0.5" />
+            ) : (
+              <AlertTriangle size={18} className="shrink-0 text-amber-400 mt-0.5" />
+            )}
+            <div className="text-sm">
+              <p className="font-medium text-white mb-1">
+                {isConnected ? "Connected" : "Not Connected"}
+              </p>
+              {isConnected && envConfig && (
+                <div className="flex flex-col gap-0.5 text-xs text-gray-400">
+                  <span>URL: <code className="font-mono text-gray-300">{envConfig.baseUrl}</code></span>
+                  <span>Auth: {envConfig.authMode === "token" ? "API Token" : `Basic (${envConfig.username})`}</span>
+                </div>
+              )}
+              {!isConnected && (
+                <p className="text-xs text-gray-400">Enter your Splunk REST API URL and a temporary API token to connect.</p>
+              )}
+            </div>
+            {isConnected && (
+              <button
+                onClick={handleDisconnect}
+                className="ml-auto rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 transition-colors"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Connect form */}
         <div className="rounded-xl border border-surface-border bg-surface-raised p-6">
-          <h2 className="text-lg font-semibold text-white mb-1">Splunk Connection</h2>
-          <p className="text-sm text-gray-500 mb-6">
-            Update the connection settings below. Changes apply immediately but reset on server restart.
-            For persistent changes, edit the <code className="text-gray-400 font-mono text-xs">.env</code> file.
+          <div className="flex items-center gap-2 mb-1">
+            <Shield size={16} className="text-brand-400" />
+            <h2 className="text-lg font-semibold text-white">Splunk Connection</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-6">
+            Token is held in server memory only — never written to disk. Expires when the server restarts or you disconnect.
           </p>
 
-          {/* Base URL */}
+          {/* Splunk URL */}
           <label className="block mb-4">
             <span className="text-sm font-medium text-gray-300 mb-1.5 block">Splunk REST API URL</span>
             <input
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500 transition-colors"
-              placeholder="https://127.0.0.1:8089"
+              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
+              placeholder="https://your-splunk-sh:8089"
             />
+            <p className="text-[10px] text-gray-600 mt-1">Management port (8089), not the web UI port (8000)</p>
           </label>
 
-          {/* Auth mode toggle */}
-          <div className="mb-4">
-            <span className="text-sm font-medium text-gray-300 mb-2 block">Authentication Method</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setAuthMode("basic")}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  authMode === "basic"
-                    ? "bg-brand-500/15 text-brand-400 border border-brand-500/30"
-                    : "bg-surface border border-surface-border text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                Username / Password
-              </button>
-              <button
-                onClick={() => setAuthMode("token")}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  authMode === "token"
-                    ? "bg-brand-500/15 text-brand-400 border border-brand-500/30"
-                    : "bg-surface border border-surface-border text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                API Token
-              </button>
-            </div>
-          </div>
-
-          {/* Auth fields */}
-          {authMode === "basic" ? (
-            <div className="flex gap-4 mb-6">
-              <label className="flex-1">
-                <span className="text-sm font-medium text-gray-300 mb-1.5 block">Username</span>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500 transition-colors"
-                />
-              </label>
-              <label className="flex-1">
-                <span className="text-sm font-medium text-gray-300 mb-1.5 block">Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500 transition-colors"
-                  placeholder={envConfig?.hasPassword ? "••••••••  (already set)" : "Enter password"}
-                />
-              </label>
-            </div>
-          ) : (
-            <label className="block mb-6">
-              <span className="text-sm font-medium text-gray-300 mb-1.5 block">Splunk API Token</span>
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 outline-none focus:border-brand-500 transition-colors font-mono"
-                placeholder={envConfig?.hasToken ? "••••••••  (already set from .env)" : "eyJra..."}
-              />
-              <p className="text-xs text-gray-500 mt-1.5">
-                {envConfig?.hasToken
-                  ? "A token is already configured. Leave blank to keep the current token, or enter a new one to replace it."
-                  : "Generate a token in Splunk: Settings \u2192 Tokens \u2192 New Token"}
-              </p>
-            </label>
-          )}
+          {/* API Token */}
+          <label className="block mb-6">
+            <span className="text-sm font-medium text-gray-300 mb-1.5 block">API Token</span>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
+              placeholder={envConfig?.hasToken ? "••••••••  (token active in memory)" : "Paste your Splunk API token"}
+              onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+            />
+            <p className="text-[10px] text-gray-600 mt-1.5">
+              Generate in Splunk: Settings → Tokens → New Token. Token stays in memory only.
+            </p>
+          </label>
 
           {/* Status message */}
           {message && (
@@ -234,12 +193,12 @@ export function SettingsPage() {
           {/* Actions */}
           <div className="flex gap-3">
             <button
-              onClick={handleSave}
-              disabled={saving}
+              onClick={handleConnect}
+              disabled={saving || !token.trim()}
               className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
             >
               {saving && <Loader2 size={14} className="animate-spin" />}
-              Save Configuration
+              Connect
             </button>
             <button
               onClick={handleTest}
@@ -249,6 +208,19 @@ export function SettingsPage() {
               {testing ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
               Test Connection
             </button>
+          </div>
+        </div>
+
+        {/* Security info */}
+        <div className="rounded-xl border border-surface-border bg-surface-raised p-4 mt-4">
+          <div className="flex items-start gap-2">
+            <Info size={14} className="shrink-0 text-gray-500 mt-0.5" />
+            <div className="text-[10px] text-gray-500 space-y-1">
+              <p>Token is stored in Node.js process memory only — not written to .env or any file.</p>
+              <p>Token is cleared when the server restarts or you click Disconnect.</p>
+              <p>For persistent config, edit the .env file directly with SPLUNK_TOKEN=...</p>
+              <p>All Splunk API calls are proxied through the Node.js backend — your browser never sees the token.</p>
+            </div>
           </div>
         </div>
       </div>
