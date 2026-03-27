@@ -197,7 +197,8 @@ export function ScheduledSearchesPage() {
     try {
       if (!query && !editSpl) {
         // Use direct REST proxy to avoid | rest caching
-        const res = await api.proxy("saved/searches?count=0");
+        // NS/ prefix tells proxy to use /servicesNS/ for all users/apps
+        const res = await api.proxy("NS/-/-/saved/searches?count=0");
         if (res.status === "ok" && res.data?.entry) {
           const parsed: SplunkResult[] = res.data.entry
             .filter((entry: any) => {

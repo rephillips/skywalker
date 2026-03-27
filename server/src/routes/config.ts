@@ -100,7 +100,9 @@ router.post("/proxy", async (req, res) => {
       return;
     }
     const separator = path.includes("?") ? "&" : "?";
-    const url = `/services/${path}${separator}output_mode=json`;
+    // Support both /services/ and /servicesNS/ paths
+    const prefix = path.startsWith("NS/") ? "/services" : "/services/";
+    const url = `${prefix}${path}${separator}output_mode=json`;
 
     const options: RequestInit = { method: method || "GET" };
     if (body && method === "POST") {
