@@ -14,6 +14,7 @@ import { SwimLanePanel } from "./SwimLanePanel";
 import { StatusDotsPanel } from "./StatusDotsPanel";
 import { StatusIndicator } from "./StatusIndicator";
 import { InlineDots } from "./InlineDots";
+import { JobInspector } from "./JobInspector";
 import { OverlayChartPanel } from "./OverlayChartPanel";
 
 interface Props {
@@ -372,9 +373,7 @@ function SidFooter({ sid }: { sid: string }) {
   const [showLog, setShowLog] = useState(false);
   const [showInspector, setShowInspector] = useState(false);
   const [log, setLog] = useState<string | null>(null);
-  const [jobInfo, setJobInfo] = useState<Record<string, any> | null>(null);
   const [loadingLog, setLoadingLog] = useState(false);
-  const [loadingJob, setLoadingJob] = useState(false);
   const [webUrl, setWebUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -396,46 +395,14 @@ function SidFooter({ sid }: { sid: string }) {
     }
   }
 
-  async function fetchJobInfo() {
-    if (jobInfo) { setShowInspector(!showInspector); setShowLog(false); return; }
-    setLoadingJob(true);
-    setShowInspector(true);
-    setShowLog(false);
-    try {
-      const data = await api.proxy(`search/v2/jobs/${encodeURIComponent(sid)}`);
-      if (data.status === "ok" && data.data?.entry?.[0]?.content) {
-        setJobInfo(data.data.entry[0].content);
-      }
-    } catch (err) {
-      setJobInfo({ error: (err as Error).message });
-    } finally {
-      setLoadingJob(false);
-    }
-  }
-
   const inspectorUrl = webUrl ? `${webUrl}/en-US/app/search/job_inspector?sid=${encodeURIComponent(sid)}` : null;
-
-  const keyMetrics = jobInfo ? [
-    { label: "Status", value: jobInfo.dispatchState, color: jobInfo.dispatchState === "DONE" ? "text-emerald-400" : "text-yellow-400" },
-    { label: "Run Duration", value: jobInfo.runDuration ? `${Number(jobInfo.runDuration).toFixed(3)}s` : "—" },
-    { label: "Scan Count", value: jobInfo.scanCount?.toLocaleString() },
-    { label: "Event Count", value: jobInfo.eventCount?.toLocaleString() },
-    { label: "Result Count", value: jobInfo.resultCount?.toLocaleString() },
-    { label: "Disk Usage", value: jobInfo.diskUsage ? `${(jobInfo.diskUsage / 1024).toFixed(1)} KB` : "—" },
-    { label: "Priority", value: jobInfo.priority },
-    { label: "TTL", value: jobInfo.ttl ? `${jobInfo.ttl}s` : "—" },
-    { label: "Is Saved", value: jobInfo.isSaved ? "Yes" : "No" },
-    { label: "Is Zombie", value: jobInfo.isZombie ? "Yes" : "No" },
-    { label: "Earliest", value: jobInfo.earliestTime },
-    { label: "Latest", value: jobInfo.latestTime },
-  ] : [];
 
   return (
     <div className="shrink-0 pt-1">
       <div className="flex items-center gap-2 text-[10px] font-mono text-gray-600">
         <span>SID: {sid}</span>
         <button
-          onClick={fetchJobInfo}
+          onClick={() => { setShowInspector(!showInspector); setShowLog(false); }}
           className="text-brand-400 hover:text-brand-50 transition-colors"
         >
           {showInspector ? "Hide Inspector" : "Job Inspector"}
@@ -458,27 +425,16 @@ function SidFooter({ sid }: { sid: string }) {
         )}
       </div>
 
-      {/* Inline Job Inspector */}
+      {/* Full Job Inspector */}
       {showInspector && (
-        <div className="mt-1 rounded-lg border border-surface-border bg-surface p-3 max-h-60 overflow-auto">
-          {loadingJob ? (
-            <span className="text-[10px] text-gray-500">Loading job info...</span>
-          ) : jobInfo ? (
-            <div className="grid grid-cols-3 gap-x-6 gap-y-1.5">
-              {keyMetrics.map((m) => (
-                <div key={m.label}>
-                  <span className="text-[9px] text-gray-500 uppercase tracking-wide">{m.label}</span>
-                  <div className={`text-[11px] font-mono ${m.color || "text-gray-300"}`}>{m.value ?? "—"}</div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+        <div className="mt-2 rounded-lg border border-surface-border bg-surface p-4">
+          <JobInspector sid={sid} />
         </div>
       )}
 
       {/* Search Log */}
       {showLog && (
-        <div className="mt-1 rounded-lg border border-surface-border bg-surface p-2 max-h-40 overflow-auto">
+        <div className="mt-2 rounded-lg border border-surface-border bg-surface p-3">
           {loadingLog ? (
             <span className="text-[10px] text-gray-500">Loading search.log...</span>
           ) : (
