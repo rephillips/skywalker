@@ -13,6 +13,8 @@ import {
   ClipboardCheck,
   CalendarClock,
   Terminal,
+  SkipForward,
+  Snail,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,7 +27,15 @@ export interface NavItem {
 
 export const navigation: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, path: "/" },
-  { label: "Search", icon: Search, path: "/search" },
+  {
+    label: "Search",
+    icon: Search,
+    children: [
+      { label: "Ad-hoc Search", icon: Search, path: "/search" },
+      { label: "Skipped Searches", icon: SkipForward, path: "/search/skipped" },
+      { label: "Slow Searches", icon: Snail, path: "/search/slow" },
+    ],
+  },
   {
     label: "Monitoring",
     icon: Activity,

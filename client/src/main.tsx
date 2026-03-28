@@ -11,6 +11,8 @@ import { SystemInfoPage } from "./pages/SystemInfoPage";
 import { KnowledgeBundlePage } from "./pages/KnowledgeBundlePage";
 import { ConfReferencePage } from "./pages/ConfReferencePage";
 import { BtoolPage } from "./pages/BtoolPage";
+import { SkippedSearchesPage } from "./pages/SkippedSearchesPage";
+import { SlowSearchesPage } from "./pages/SlowSearchesPage";
 import { ScheduledSearchesPage } from "./pages/ScheduledSearchesPage";
 import "./index.css";
 
@@ -21,6 +23,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "search/skipped", element: <SkippedSearchesPage /> },
+      { path: "search/slow", element: <SlowSearchesPage /> },
       { path: "docs", element: <DocsPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "system-info", element: <SystemInfoPage /> },
