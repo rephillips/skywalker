@@ -42,52 +42,91 @@ function Dot({ dot, onEdit, onRemove }: {
 
   if (editing) {
     return (
-      <div className="flex flex-col gap-1 p-2 rounded-lg border border-surface-border bg-surface text-[9px]">
-        <div className="flex items-center gap-1">
-          <input
-            value={editLabel}
-            onChange={(e) => setEditLabel(e.target.value)}
-            className="w-20 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-200 outline-none"
-            placeholder="Name"
-            autoFocus
-          />
-          <input
-            value={editSpl}
-            onChange={(e) => setEditSpl(e.target.value)}
-            className="w-48 rounded border border-surface-border bg-surface-raised px-1 py-0.5 font-mono text-gray-300 outline-none"
-            placeholder="SPL query"
-          />
+      <div className="flex flex-col gap-3 p-4 rounded-xl border border-surface-border bg-surface w-full max-w-lg">
+        {/* Name + SPL */}
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-gray-400">Name</span>
+            <input
+              value={editLabel}
+              onChange={(e) => setEditLabel(e.target.value)}
+              className="rounded-lg border border-surface-border bg-surface-raised px-3 py-2 text-sm text-gray-200 outline-none focus:border-brand-500"
+              placeholder="e.g. Error Count"
+              autoFocus
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-gray-400">SPL Query</span>
+            <input
+              value={editSpl}
+              onChange={(e) => setEditSpl(e.target.value)}
+              className="rounded-lg border border-surface-border bg-surface-raised px-3 py-2 text-sm font-mono text-gray-300 outline-none focus:border-brand-500"
+              placeholder="index=_internal | stats count"
+            />
+          </label>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-emerald-400">G≤</span>
-          <input type="number" value={editGreen} onChange={(e) => setEditGreen(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
-          <span className="text-yellow-400">Y≤</span>
-          <input type="number" value={editYellow} onChange={(e) => setEditYellow(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
-          <span className="text-orange-400">O≤</span>
-          <input type="number" value={editOrange} onChange={(e) => setEditOrange(Number(e.target.value))} className="w-12 rounded border border-surface-border bg-surface-raised px-1 py-0.5 text-gray-300 outline-none" />
+        {/* Thresholds */}
+        <div>
+          <span className="text-[11px] font-medium text-gray-400 block mb-2">Thresholds (value ≤ threshold = color)</span>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-emerald-500" style={{ boxShadow: "0 0 6px #10b98180" }} />
+              <span className="text-xs text-gray-400">Green ≤</span>
+              <input type="number" value={editGreen} onChange={(e) => setEditGreen(Number(e.target.value))}
+                className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
+            </label>
+            <label className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-yellow-500" style={{ boxShadow: "0 0 6px #eab30880" }} />
+              <span className="text-xs text-gray-400">Yellow ≤</span>
+              <input type="number" value={editYellow} onChange={(e) => setEditYellow(Number(e.target.value))}
+                className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
+            </label>
+            <label className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500" style={{ boxShadow: "0 0 6px #f9731680" }} />
+              <span className="text-xs text-gray-400">Orange ≤</span>
+              <input type="number" value={editOrange} onChange={(e) => setEditOrange(Number(e.target.value))}
+                className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
+            </label>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-full bg-red-500" style={{ boxShadow: "0 0 6px #ef444480" }} />
+              <span className="text-xs text-gray-400">Red = above</span>
+            </div>
+          </div>
+        </div>
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-1 border-t border-surface-border/50">
           <button
             onClick={() => {
               if (onEdit) onEdit({ label: editLabel, spl: editSpl, thresholds: { green: editGreen, yellow: editYellow, orange: editOrange } });
               setEditing(false);
             }}
-            className="text-emerald-400 p-0.5"
-          ><Check size={10} /></button>
-          <button onClick={() => setEditing(false)} className="text-gray-500 p-0.5"><X size={10} /></button>
-          {onRemove && <button onClick={onRemove} className="text-red-400 p-0.5 ml-auto">Remove</button>}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors"
+          ><Check size={12} /> Save</button>
+          <button onClick={() => setEditing(false)}
+            className="flex items-center gap-1.5 rounded-lg border border-surface-border px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+          ><X size={12} /> Cancel</button>
+          {onRemove && (
+            <button onClick={onRemove}
+              className="ml-auto text-xs text-red-400 hover:text-red-300 transition-colors"
+            >Remove dot</button>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="group relative flex items-center gap-1 cursor-pointer" onClick={() => onEdit && setEditing(true)}>
+    <div className="group relative flex items-center gap-2 cursor-pointer" onClick={() => onEdit && setEditing(true)}>
       <div
-        className="w-2.5 h-2.5 rounded-full shrink-0"
-        style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}80` }}
+        className="w-3 h-3 rounded-full shrink-0"
+        style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}, 0 0 8px ${color}80, 0 0 12px ${color}40` }}
       />
-      <span className="text-[9px] text-gray-500 whitespace-nowrap">
-        {dot.label}{value !== null ? `: ${value}` : ""}
-      </span>
+      <div className="flex flex-col">
+        <span className="text-[10px] text-gray-400 leading-tight">{dot.label}</span>
+        {value !== null && (
+          <span className="text-sm font-bold font-mono leading-tight" style={{ color }}>{value.toLocaleString()}</span>
+        )}
+      </div>
       {onEdit && (
         <Pencil size={8} className="hidden group-hover:block text-gray-600" />
       )}
