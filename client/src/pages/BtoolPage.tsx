@@ -77,7 +77,6 @@ export function BtoolPage() {
   const [excludePath, setExcludePath] = useState("/opt/splunk/etc/system/default/");
   const [excludeEnabled, setExcludeEnabled] = useState(false);
   const [activeGroup, setActiveGroup] = useState("btool check");
-  const [collapsedStanzas, setCollapsedStanzas] = useState<Set<string>>(new Set());
 
   async function runCommand() {
     setLoading(true);
@@ -117,22 +116,6 @@ export function BtoolPage() {
       return Object.values(r).some((v) => String(v).toLowerCase().includes(lowerFilter));
     });
 
-  // Group by stanza
-  const stanzaGroups = new Map<string, SplunkResult[]>();
-  filtered.forEach((r) => {
-    const stanza = r["btool.stanza"] || r["stanza"] || "No Stanza";
-    if (!stanzaGroups.has(stanza)) stanzaGroups.set(stanza, []);
-    stanzaGroups.get(stanza)!.push(r);
-  });
-
-  function toggleStanza(stanza: string) {
-    setCollapsedStanzas((prev) => {
-      const next = new Set(prev);
-      if (next.has(stanza)) next.delete(stanza);
-      else next.add(stanza);
-      return next;
-    });
-  }
 
   return (
     <div className="flex-1 flex flex-col">
@@ -212,7 +195,7 @@ export function BtoolPage() {
             <div className="flex flex-col gap-2 mb-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  {filtered.length} of {results.length} results • {stanzaGroups.size} stanzas
+                  {filtered.length} of {results.length} results
                 </span>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -225,18 +208,6 @@ export function BtoolPage() {
                       placeholder="Filter results..."
                     />
                   </div>
-                  <button
-                    onClick={() => setCollapsedStanzas(new Set())}
-                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
-                  >
-                    Expand all
-                  </button>
-                  <button
-                    onClick={() => setCollapsedStanzas(new Set(stanzaGroups.keys()))}
-                    className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
-                  >
-                    Collapse all
-                  </button>
                 </div>
               </div>
               {/* Exclude path */}
@@ -261,81 +232,54 @@ export function BtoolPage() {
             </div>
           )}
 
-          {/* Results — grouped by stanza */}
-          {stanzaGroups.size > 0 && (
-            <div className="flex-1 min-h-0 overflow-auto flex flex-col gap-3">
-              {Array.from(stanzaGroups.entries()).map(([stanza, rows]) => {
-                const isCollapsed = collapsedStanzas.has(stanza);
-                const app = rows[0]?.["btool.stanza.app"] || rows[0]?.["btool.source"] || "";
-                const scope = rows[0]?.["btool.stanza.scope"] || "";
-                // Extract conf file name from multiple possible fields or parse from _raw
-                let confName = rows[0]?.["btool.cmd.conf"] || rows[0]?.["btool.source"] || "";
-                if (!confName) {
-                  // Try to parse from _raw: /path/to/something.conf  key = value
-                  const rawMatch = (rows[0]?._raw || "").match(/\/([^/]+)\.conf\s/);
-                  if (rawMatch) confName = rawMatch[1];
-                }
-                // Also try parsing from the SPL command: | btool inputs list
-                if (!confName) {
-                  const splMatch = spl.match(/\|\s*btool\s+(\w+)\s+/);
-                  if (splMatch) confName = splMatch[1];
-                }
-                const confSpecUrl = confName
-                  ? `https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/latest/configuration-file-reference/latest-configuration-file-reference/${confName}.conf`
-                  : "";
-                return (
-                  <div key={stanza} className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden min-w-0">
-                    {/* Stanza header */}
-                    <div className="flex w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors">
-                      <button
-                        onClick={() => toggleStanza(stanza)}
-                        className="flex items-center gap-3 flex-1 text-left"
-                      >
-                        <code className="text-sm font-mono text-brand-400 font-semibold">[{stanza}]</code>
-                        {confName && (
-                          <span className="text-[10px] font-mono text-gray-500">{confName}.conf</span>
-                        )}
-                        <span className="text-[10px] text-gray-500">{rows.length} event{rows.length !== 1 && "s"}</span>
-                        {app && <span className="text-[10px] text-gray-600">app: {app}</span>}
-                        {scope && <span className="text-[10px] text-gray-600">scope: {scope}</span>}
-                        <span className="ml-auto text-[10px] text-gray-600">{isCollapsed ? "▶" : "▼"}</span>
-                      </button>
-                      {confSpecUrl && (
-                        <a
-                          href={confSpecUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors shrink-0"
-                          title={`View ${confName}.conf spec on docs.splunk.com`}
-                        >
-                          spec ↗
-                        </a>
-                      )}
-                    </div>
-                    {/* Stanza content — just the raw btool output */}
-                    {!isCollapsed && (
-                      <div className="px-4 py-2 border-t border-surface-border/30 overflow-hidden">
-                        <pre className="text-[11px] font-mono text-gray-300 leading-relaxed whitespace-pre-wrap break-all">{
-                          rows.map((row) => {
-                            const raw = row._raw || "";
-                            return raw.split("\n")
-                              .filter((l: string) => {
-                                if (!l.trim()) return false;
-                                // Strip stanza header lines
-                                if (l.match(/^\s*\S+\.(conf|spec)\s+\[/)) return false;
-                                // Apply exclude path filter per line
-                                if (excludeEnabled && excludePath && l.includes(excludePath)) return false;
-                                return true;
-                              })
+          {/* Results table */}
+          {filtered.length > 0 && (
+            <div className="flex-1 min-h-0 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+              <div className="overflow-auto h-full">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-surface-raised z-10">
+                    <tr className="border-b border-surface-border">
+                      {columns.map((col) => (
+                        <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((row, i) => (
+                      <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
+                        {columns.map((col) => {
+                          let val = row[col] || "";
+                          // Apply exclude path filter to _raw lines
+                          if (col === "_raw" && excludeEnabled && excludePath && val) {
+                            val = val.split("\n")
+                              .filter((l: string) => !l.includes(excludePath))
                               .join("\n");
-                          }).filter((s) => s.trim()).join("\n")
-                        }</pre>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          }
+                          if (col === "message_type" && MESSAGE_COLORS[val]) {
+                            return (
+                              <td key={col} className="px-3 py-1.5">
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${MESSAGE_COLORS[val]}`}>{val}</span>
+                              </td>
+                            );
+                          }
+                          if (col === "_raw") {
+                            return (
+                              <td key={col} className="px-3 py-1.5 text-[11px] font-mono text-gray-300 max-w-2xl">
+                                <pre className="whitespace-pre-wrap break-all">{val}</pre>
+                              </td>
+                            );
+                          }
+                          return (
+                            <td key={col} className="px-3 py-1.5 text-xs font-mono text-gray-300 whitespace-nowrap" title={val}>{val}</td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
