@@ -150,6 +150,23 @@ html.light .text-white { color: #1a1714; }
   color: #9ca3af !important;
 }
 
+/* Remove white outlines from chart elements */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+.recharts-active-dot circle,
+.recharts-dot circle {
+  stroke: #161922 !important;
+  stroke-width: 2 !important;
+}
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #1e2130 !important;
+}
+.recharts-tooltip-cursor {
+  stroke: #2a2d37 !important;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
