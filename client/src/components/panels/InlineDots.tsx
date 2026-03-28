@@ -67,29 +67,33 @@ function Dot({ dot, onEdit, onRemove }: {
         </div>
         {/* Thresholds */}
         <div>
-          <span className="text-[11px] font-medium text-gray-400 block mb-2">Thresholds (value ≤ threshold = color)</span>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500" style={{ boxShadow: "0 0 6px #10b98180" }} />
-              <span className="text-xs text-gray-400">Green ≤</span>
+          <span className="text-[11px] font-medium text-gray-400 block mb-3">Color Thresholds</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shrink-0" style={{ boxShadow: "0 0 6px #10b98180" }} />
+              <span className="text-xs text-gray-300 w-14">Green</span>
+              <span className="text-xs text-gray-500">when count is between 0 and</span>
               <input type="number" value={editGreen} onChange={(e) => setEditGreen(Number(e.target.value))}
                 className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
-            </label>
-            <label className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-yellow-500" style={{ boxShadow: "0 0 6px #eab30880" }} />
-              <span className="text-xs text-gray-400">Yellow ≤</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-yellow-500 shrink-0" style={{ boxShadow: "0 0 6px #eab30880" }} />
+              <span className="text-xs text-gray-300 w-14">Yellow</span>
+              <span className="text-xs text-gray-500">when count is between {editGreen + 1} and</span>
               <input type="number" value={editYellow} onChange={(e) => setEditYellow(Number(e.target.value))}
                 className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
-            </label>
-            <label className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-orange-500" style={{ boxShadow: "0 0 6px #f9731680" }} />
-              <span className="text-xs text-gray-400">Orange ≤</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-orange-500 shrink-0" style={{ boxShadow: "0 0 6px #f9731680" }} />
+              <span className="text-xs text-gray-300 w-14">Orange</span>
+              <span className="text-xs text-gray-500">when count is between {editYellow + 1} and</span>
               <input type="number" value={editOrange} onChange={(e) => setEditOrange(Number(e.target.value))}
                 className="w-20 rounded-lg border border-surface-border bg-surface-raised px-2 py-1.5 text-sm text-gray-300 outline-none focus:border-brand-500" />
-            </label>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500" style={{ boxShadow: "0 0 6px #ef444480" }} />
-              <span className="text-xs text-gray-400">Red = above</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-3.5 h-3.5 rounded-full bg-red-500 shrink-0" style={{ boxShadow: "0 0 6px #ef444480" }} />
+              <span className="text-xs text-gray-300 w-14">Red</span>
+              <span className="text-xs text-gray-500">when count is above {editOrange}</span>
             </div>
           </div>
         </div>
