@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Clock, Sun, Moon } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useGlobalTime, TIME_PRESETS } from "../../hooks/useGlobalTime";
@@ -12,15 +12,14 @@ export function TopBar({ title }: Props) {
   const { label, setTime } = useGlobalTime();
   const [connection, setConnection] = useState<{ connected: boolean; host: string }>({ connected: false, host: "" });
 
-  useEffect(() => {
+  const checkConnection = useCallback(() => {
     fetch("/api/config", { headers: { "Cache-Control": "no-cache" } })
       .then((r) => r.json())
       .then((cfg) => {
         const hasAuth = cfg.hasToken || cfg.hasPassword;
         const host = cfg.baseUrl?.replace(/^https?:\/\//, "").replace(/:\d+$/, "") || "";
         if (hasAuth) {
-          // Quick health check
-          fetch("/api/health")
+          fetch("/api/health", { headers: { "Cache-Control": "no-cache" } })
             .then((r) => r.json())
             .then((h) => setConnection({ connected: h.splunk === "reachable", host: h.serverName || host }))
             .catch(() => setConnection({ connected: false, host }));
@@ -31,6 +30,13 @@ export function TopBar({ title }: Props) {
       .catch(() => setConnection({ connected: false, host: "" }));
   }, []);
 
+  useEffect(() => {
+    checkConnection();
+    // Listen for connection changes from Settings page
+    window.addEventListener("skywalker-connection-changed", checkConnection);
+    return () => window.removeEventListener("skywalker-connection-changed", checkConnection);
+  }, [checkConnection]);
+
   return (
     <header className="flex h-14 items-center justify-between border-b border-surface-border px-6">
       <h1 className="text-lg font-semibold text-white">{title}</h1>
@@ -38,12 +44,12 @@ export function TopBar({ title }: Props) {
         {/* Connection status */}
         <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5">
           <div
-            className="w-2 h-2 rounded-full shrink-0"
+            className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
             style={{
-              backgroundColor: connection.connected ? "#10b981" : "#ef4444",
+              backgroundColor: connection.connected ? "#00ff87" : "#ff3366",
               boxShadow: connection.connected
-                ? "0 0 6px #10b98180, 0 0 12px #10b98140"
-                : "0 0 6px #ef444480, 0 0 12px #ef444440",
+                ? "0 0 4px #00ff87, 0 0 8px #00ff8780, 0 0 16px #00ff8740, 0 0 24px #00ff8720"
+                : "0 0 4px #ff3366, 0 0 8px #ff336680, 0 0 16px #ff336640",
             }}
           />
           <span className="text-[10px] text-gray-400 font-mono">

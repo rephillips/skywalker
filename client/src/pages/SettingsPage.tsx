@@ -48,6 +48,7 @@ export function SettingsPage() {
       setMessage({ type: data.status, text: data.message });
       const updated = await fetch("/api/config").then((r) => r.json());
       setEnvConfig(updated);
+      window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
     } finally {
@@ -66,6 +67,7 @@ export function SettingsPage() {
       } else {
         setMessage({ type: "error", text: data.message });
       }
+      window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
     } finally {
@@ -84,6 +86,7 @@ export function SettingsPage() {
       const updated = await fetch("/api/config").then((r) => r.json());
       setEnvConfig(updated);
       setMessage({ type: "ok", text: "Token cleared from memory" });
+      window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
     }
