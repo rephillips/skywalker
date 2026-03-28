@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Snail, Play, Loader2 } from "lucide-react";
+import { LineChart } from "@tremor/react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -14,9 +15,18 @@ const DEFAULT_SPL = `index=_audit sourcetype=audittrail action=search info=compl
 | sort -avg_runtime
 | rename savedsearch_name AS "Search Name", user AS "User", app AS "App", executions AS "Runs", avg_runtime AS "Avg Runtime (s)", max_runtime AS "Max Runtime (s)", last_run AS "Last Run"`;
 
+const TIMECHART_SPL = `index=_audit sourcetype=audittrail action=search info=completed
+| eval run_time=round(total_run_time, 2)
+| where run_time > THRESHOLD
+| timechart span=10m avg(run_time) as "Avg Runtime" max(run_time) as "Max Runtime" count as "Search Count"`;
+
+const NEON_COLORS = ["emerald", "cyan", "fuchsia"];
+
 export function SlowSearchesPage() {
   const [spl, setSpl] = useState(DEFAULT_SPL);
   const [results, setResults] = useState<SplunkResult[]>([]);
+  const [chartData, setChartData] = useState<Record<string, string | number>[]>([]);
+  const [chartCategories, setChartCategories] = useState<string[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,12 +38,30 @@ export function SlowSearchesPage() {
     setLoading(true);
     setError(null);
     try {
-      // Replace threshold in SPL
+      // Run table query
       const adjustedSpl = spl.replace(/where run_time > \d+/, `where run_time > ${threshold}`);
       const res = await api.search(adjustedSpl, "-24h", "now");
       setResults(res.results || []);
       if (res.results?.length > 0) {
         setColumns(Object.keys(res.results[0]).filter((k) => !k.startsWith("_")));
+      }
+
+      // Run timechart query
+      const tcSpl = TIMECHART_SPL.replace("THRESHOLD", String(threshold));
+      const tcRes = await api.search(tcSpl, "-24h", "now");
+      if (tcRes.results?.length > 0) {
+        const keys = Object.keys(tcRes.results[0]).filter((k) => k !== "_time" && !k.startsWith("_"));
+        setChartCategories(keys);
+        setChartData(tcRes.results.map((row) => {
+          const point: Record<string, string | number> = {
+            _time: new Date(row._time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          };
+          keys.forEach((k) => { point[k] = Number(row[k]) || 0; });
+          return point;
+        }));
+      } else {
+        setChartData([]);
+        setChartCategories([]);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -106,10 +134,29 @@ export function SlowSearchesPage() {
 
         {error && <div className="mb-4"><ErrorAlert message={error} /></div>}
 
-        {/* Results */}
+        {/* Timechart */}
+        {chartData.length > 0 && (
+          <div className="rounded-xl border border-surface-border bg-surface-raised p-4 mb-4">
+            <h3 className="text-xs font-semibold text-white mb-3">Slow Search Activity Over Time</h3>
+            <div style={{ height: 250 }}>
+              <LineChart
+                data={chartData}
+                index="_time"
+                categories={chartCategories}
+                colors={NEON_COLORS.slice(0, chartCategories.length)}
+                yAxisWidth={48}
+                showAnimation
+                showLegend
+                style={{ height: 250, width: "100%" }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Results table */}
         {filtered.length > 0 && (
           <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
-            <div className="overflow-auto max-h-[calc(100vh-380px)]">
+            <div className="overflow-auto max-h-[calc(100vh-580px)]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-surface-raised z-10">
                   <tr className="border-b border-surface-border">
