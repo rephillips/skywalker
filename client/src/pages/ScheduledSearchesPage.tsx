@@ -276,8 +276,16 @@ export function ScheduledSearchesPage() {
 
       if (res.status === "ok") {
         setSaveMsg({ type: "ok", text: `Updated: ${Object.keys(updates).join(", ")}` });
-        // Refresh the table after a short delay
-        setTimeout(() => { fetchScheduled(); setFixingRow(null); setSaveMsg(null); }, 1500);
+        // Immediately patch local row so the table reflects the fix
+        setResults((prev) =>
+          prev.map((r) =>
+            r["title"] === row["title"]
+              ? { ...r, cron_schedule: fixCron, "dispatch.earliest_time": fixEarliest, "dispatch.latest_time": fixLatest }
+              : r
+          )
+        );
+        // Also refetch from Splunk in the background to pick up any server-side changes
+        setTimeout(() => { fetchScheduled(); setFixingRow(null); setSaveMsg(null); }, 2000);
       } else {
         setSaveMsg({ type: "error", text: res.message });
       }
