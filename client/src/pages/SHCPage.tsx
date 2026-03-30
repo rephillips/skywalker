@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Network, RefreshCw, Loader2, Info } from "lucide-react";
+import { Network, RefreshCw, Loader2, SearchCode } from "lucide-react";
 import { LineChart } from "@tremor/react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -86,20 +86,6 @@ export function SHCPage() {
                 <option value="-7d">7d</option>
               </select>
             </div>
-            <div className="relative" ref={infoRef}>
-              <button onClick={() => setShowInfo(!showInfo)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-gray-200 hover:bg-surface-hover transition-colors" title="View SPL query">
-                <Info size={14} />
-              </button>
-              {showInfo && (
-                <div className="absolute right-0 top-9 z-50 w-96 rounded-xl border border-surface-border bg-surface-raised shadow-2xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
-                    <CopyButton text={spl} />
-                  </div>
-                  <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-48 overflow-auto">{spl}</pre>
-                </div>
-              )}
-            </div>
             <button onClick={() => runSearch()} disabled={loading}
               className="flex items-center gap-1.5 rounded-lg bg-surface border border-surface-border px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
               {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
@@ -122,17 +108,34 @@ export function SHCPage() {
         )}
 
         {chartData.length > 0 && (
-          <div className="-mx-6 px-4" style={{ height: 400 }}>
-            <LineChart
-              data={chartData}
-              index="_time"
-              categories={chartCategories}
-              colors={NEON_COLORS.slice(0, chartCategories.length)}
-              yAxisWidth={32}
-              showAnimation
-              showLegend
-              style={{ height: 400, width: "100%" }}
-            />
+          <div className="-mx-6 px-4 relative">
+            <div style={{ height: 220 }}>
+              <LineChart
+                data={chartData}
+                index="_time"
+                categories={chartCategories}
+                colors={NEON_COLORS.slice(0, chartCategories.length)}
+                yAxisWidth={32}
+                showAnimation
+                showLegend
+                style={{ height: 220, width: "100%" }}
+              />
+            </div>
+            {/* SPL info popover — bottom right of chart */}
+            <div className="absolute bottom-2 right-6" ref={infoRef}>
+              <button onClick={() => setShowInfo(!showInfo)} className="flex items-center justify-center w-6 h-6 rounded-md text-gray-600 hover:text-gray-300 hover:bg-surface-hover/60 transition-colors" title="View SPL query">
+                <SearchCode size={13} />
+              </button>
+              {showInfo && (
+                <div className="absolute right-0 bottom-8 z-50 w-96 rounded-xl border border-surface-border bg-surface-raised shadow-2xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
+                    <CopyButton text={spl} />
+                  </div>
+                  <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-48 overflow-auto">{spl}</pre>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
