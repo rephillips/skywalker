@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Network, RefreshCw, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Network, RefreshCw, Loader2, Info } from "lucide-react";
 import { LineChart } from "@tremor/react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -19,9 +19,9 @@ export function SHCPage() {
   const [chartCategories, setChartCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editSpl, setEditSpl] = useState(false);
   const [timeRange, setTimeRange] = useState("-4h");
-  const [showSpl, setShowSpl] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
 
   const runSearch = useCallback(async (searchSpl?: string, range?: string) => {
     setLoading(true);
@@ -52,6 +52,16 @@ export function SHCPage() {
   // Auto-run on mount
   useEffect(() => { runSearch(); }, []);
 
+  // Close info popover on click outside
+  useEffect(() => {
+    if (!showInfo) return;
+    function handleClick(e: MouseEvent) {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) setShowInfo(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showInfo]);
+
   return (
     <div className="flex-1 flex flex-col">
       <TopBar title="Search Head Clustering" />
@@ -76,9 +86,20 @@ export function SHCPage() {
                 <option value="-7d">7d</option>
               </select>
             </div>
-            <button onClick={() => setShowSpl(!showSpl)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
-              {showSpl ? "Hide SPL" : "View SPL"}
-            </button>
+            <div className="relative" ref={infoRef}>
+              <button onClick={() => setShowInfo(!showInfo)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-500 hover:text-gray-200 hover:bg-surface-hover transition-colors" title="View SPL query">
+                <Info size={14} />
+              </button>
+              {showInfo && (
+                <div className="absolute right-0 top-9 z-50 w-96 rounded-xl border border-surface-border bg-surface-raised shadow-2xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
+                    <CopyButton text={spl} />
+                  </div>
+                  <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-48 overflow-auto">{spl}</pre>
+                </div>
+              )}
+            </div>
             <button onClick={() => runSearch()} disabled={loading}
               className="flex items-center gap-1.5 rounded-lg bg-surface border border-surface-border px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
               {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
@@ -89,31 +110,6 @@ export function SHCPage() {
             )}
           </div>
         </div>
-
-        {/* SPL (collapsed by default) */}
-        {showSpl && (
-          <div className="rounded-xl border border-surface-border bg-surface-raised p-3 mb-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
-              <div className="flex items-center gap-2">
-                <CopyButton text={spl} />
-                <button onClick={() => setEditSpl(!editSpl)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
-                  {editSpl ? "Cancel" : "Edit"}
-                </button>
-              </div>
-            </div>
-            {editSpl ? (
-              <div className="flex flex-col gap-2">
-                <textarea value={spl} onChange={(e) => setSpl(e.target.value)} rows={6}
-                  className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y" spellCheck={false} />
-                <button onClick={() => { runSearch(); setEditSpl(false); setShowSpl(false); }}
-                  className="self-start rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors">Run</button>
-              </div>
-            ) : (
-              <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{spl}</pre>
-            )}
-          </div>
-        )}
 
         {error && <div className="mb-4"><ErrorAlert message={error} /></div>}
 
