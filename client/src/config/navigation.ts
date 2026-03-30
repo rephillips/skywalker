@@ -15,6 +15,7 @@ import {
   Terminal,
   SkipForward,
   Snail,
+  Network,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const navigation: NavItem[] = [
     ],
   },
   { label: "System Info", icon: MonitorCog, path: "/system-info" },
+  { label: "Search Head Clustering", icon: Network, path: "/shc" },
   { label: "Knowledge", icon: Package, path: "/knowledge" },
   {
     label: "Audits",
