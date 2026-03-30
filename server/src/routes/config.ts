@@ -61,7 +61,14 @@ router.post("/saved-search/update", async (req, res) => {
     // First, get current state to preserve it
     const getUrl = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
     const current = await splunkFetch(getUrl);
-    const currentContent = current?.entry?.[0]?.content || {};
+    const currentEntry = current?.entry?.[0] || {};
+    const currentContent = currentEntry.content || {};
+    const currentAcl = currentEntry.acl || {};
+
+    // Determine correct owner for POST: use "nobody" for app/global-shared searches
+    // to prevent Splunk from downgrading sharing to private (user scope)
+    const sharing = currentAcl.sharing || "user";
+    const effectiveOwner = (sharing === "app" || sharing === "global") ? "nobody" : ownerPath;
 
     const body = new URLSearchParams();
     // Preserve current scheduling state — normalize booleans to Splunk's expected "1"/"0"
@@ -77,8 +84,8 @@ router.post("/saved-search/update", async (req, res) => {
     if (updates["dispatch.earliest_time"] !== undefined) body.set("dispatch.earliest_time", updates["dispatch.earliest_time"]);
     if (updates["dispatch.latest_time"] !== undefined) body.set("dispatch.latest_time", updates["dispatch.latest_time"]);
 
-    const postUrl = `/servicesNS/${encodeURIComponent(ownerPath)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
-    console.log(`[SavedSearch] POST ${postUrl}`);
+    const postUrl = `/servicesNS/${encodeURIComponent(effectiveOwner)}/${encodeURIComponent(appPath)}/saved/searches/${encodeURIComponent(name)}?output_mode=json`;
+    console.log(`[SavedSearch] POST ${postUrl} (sharing=${sharing}, effectiveOwner=${effectiveOwner})`);
     console.log(`[SavedSearch] Body: ${body.toString()}`);
 
     const url = postUrl;
