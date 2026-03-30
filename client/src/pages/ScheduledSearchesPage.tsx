@@ -10,11 +10,11 @@ import { CopyButton } from "../components/common/CopyButton";
 const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, search';
 const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, disabled, search';
 
-/** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into seconds */
-function parseTimeRangeSeconds(earliest: string): number | null {
-  if (!earliest) return null;
+/** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into offset seconds from now */
+function parseRelativeTimeOffsetSeconds(timeStr: string): number | null {
+  if (!timeStr || timeStr === "now") return 0;
   // Strip snap-to modifiers like @h, @d
-  const clean = earliest.replace(/@[a-z]+$/i, "");
+  const clean = timeStr.replace(/@[a-z]+$/i, "");
   const m = clean.match(/^-(\d+)(s|m|h|d|w|mon)$/);
   if (!m) return null;
   const val = parseInt(m[1]);
@@ -27,6 +27,14 @@ function parseTimeRangeSeconds(earliest: string): number | null {
     case "mon": return val * 2592000;
     default: return null;
   }
+}
+
+/** Compute the actual scan window in seconds between earliest and latest */
+function computeTimeWindowSeconds(earliest: string, latest: string): number | null {
+  const e = parseRelativeTimeOffsetSeconds(earliest);
+  const l = parseRelativeTimeOffsetSeconds(latest || "now");
+  if (e === null || l === null) return null;
+  return Math.abs(e - l);
 }
 
 /** Parse cron schedule to get the minimum interval in seconds between runs */
@@ -71,32 +79,37 @@ function parseCronIntervalSeconds(cron: string): number | null {
 }
 
 interface Efficiency {
-  runTimeSec: number | null;
+  valueSec: number | null;
   cronIntervalSec: number | null;
   ratio: number | null;
   status: "ok" | "warning" | "critical" | "unknown";
   message: string;
+  source: "run_time" | "time_window" | "none";
 }
 
-function analyzeEfficiency(runTimeSec: number | null, cron: string): Efficiency {
+/** Analyze efficiency using run_time (preferred) or time window (earliest-latest) as fallback */
+function analyzeEfficiency(runTimeSec: number | null, timeWindowSec: number | null, cron: string): Efficiency {
   const ci = parseCronIntervalSeconds(cron);
 
-  if (runTimeSec === null && ci !== null) {
-    return { runTimeSec: null, cronIntervalSec: ci, ratio: null, status: "unknown", message: `No run data — cron every ${formatSeconds(ci)}` };
-  }
-  if (runTimeSec === null || ci === null) {
-    return { runTimeSec, cronIntervalSec: ci, ratio: null, status: "unknown", message: runTimeSec === null ? "No run data" : "Cannot parse cron" };
+  // Prefer actual run duration, fall back to time window
+  const val = runTimeSec ?? timeWindowSec;
+  const source = runTimeSec !== null ? "run_time" as const : timeWindowSec !== null ? "time_window" as const : "none" as const;
+
+  if (val === null || ci === null) {
+    return { valueSec: val, cronIntervalSec: ci, ratio: null, status: "unknown", message: val === null ? "No data" : "Cannot parse cron", source };
   }
 
-  const ratio = runTimeSec / ci;
+  const ratio = val / ci;
+  const label = source === "run_time" ? `${formatSeconds(val)} run` : `${formatSeconds(val)} window`;
+  const suffix = `/ ${formatSeconds(ci)} interval`;
 
-  if (ratio <= 0.5) {
-    return { runTimeSec, cronIntervalSec: ci, ratio, status: "ok", message: `${formatSeconds(runTimeSec)} run / ${formatSeconds(ci)} interval — Efficient` };
+  if (ratio <= 1.0) {
+    return { valueSec: val, cronIntervalSec: ci, ratio, status: "ok", message: `${label} ${suffix} — Efficient`, source };
   }
-  if (ratio <= 0.8) {
-    return { runTimeSec, cronIntervalSec: ci, ratio, status: "warning", message: `${formatSeconds(runTimeSec)} run / ${formatSeconds(ci)} interval — Tight` };
+  if (ratio <= 2.0) {
+    return { valueSec: val, cronIntervalSec: ci, ratio, status: "warning", message: `${label} ${suffix} — Overlap`, source };
   }
-  return { runTimeSec, cronIntervalSec: ci, ratio, status: "critical", message: `${formatSeconds(runTimeSec)} run / ${formatSeconds(ci)} interval — Duration exceeds or near interval` };
+  return { valueSec: val, cronIntervalSec: ci, ratio, status: "critical", message: `${label} ${suffix} — Heavy overlap`, source };
 }
 
 /** Detect inline earliest=/latest= in SPL that override dispatch times */
@@ -321,19 +334,20 @@ export function ScheduledSearchesPage() {
 
   const lowerFilter = filter.toLowerCase();
 
-  // Compute efficiency for all rows using latest run_time from scheduler
+  // Compute efficiency for all rows using run_time (preferred) or time window (fallback)
   const rowsWithEfficiency = useMemo(() => {
     return results.map((r) => {
       const inlineOverrides = detectInlineTimeOverrides(r["search"] || "");
       const effectiveEarliest = inlineOverrides?.earliest || r["dispatch.earliest_time"] || "";
+      const effectiveLatest = inlineOverrides?.latest || r["dispatch.latest_time"] || "now";
       const title = r["title"] || "";
       const rt = runTimes[title] ?? null;
+      const tw = computeTimeWindowSeconds(effectiveEarliest, effectiveLatest);
       return {
         ...r,
         _inlineOverrides: inlineOverrides,
         _effectiveEarliest: effectiveEarliest,
-        _runTimeSec: rt,
-        _efficiency: analyzeEfficiency(rt, r["cron_schedule"] || ""),
+        _efficiency: analyzeEfficiency(rt, tw, r["cron_schedule"] || ""),
       };
     });
   }, [results, runTimes]);
@@ -540,11 +554,11 @@ export function ScheduledSearchesPage() {
                                   "text-red-400": eff.status === "critical",
                                   "text-gray-500": eff.status === "unknown",
                                 })}>
-                                  {eff.ratio !== null ? `${Math.round(eff.ratio * 100)}%` : "?"}
+                                  {eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?"}
                                 </span>
                                 <span className="text-[9px] text-gray-500">
-                                  {eff.runTimeSec !== null && eff.cronIntervalSec !== null
-                                    ? `${formatSeconds(eff.runTimeSec)} run / ${formatSeconds(eff.cronIntervalSec)} interval`
+                                  {eff.valueSec !== null && eff.cronIntervalSec !== null
+                                    ? `${formatSeconds(eff.valueSec)} ${eff.source === "run_time" ? "run" : "window"} / ${formatSeconds(eff.cronIntervalSec)} interval`
                                     : eff.message}
                                 </span>
                               </div>
@@ -739,28 +753,28 @@ export function ScheduledSearchesPage() {
         {/* Efficiency legend */}
         {showEfficiency && (
           <div className="mt-4 rounded-xl border border-surface-border bg-surface-raised p-4">
-            <h3 className="text-xs font-semibold text-white mb-2">Efficiency Analysis — Run Duration vs Frequency</h3>
+            <h3 className="text-xs font-semibold text-white mb-2">Efficiency Analysis</h3>
             <p className="text-[10px] text-gray-500 mb-3">
-              Compares the latest run duration (from scheduler.log) against the cron schedule interval.
-              If a search takes longer to run than its scheduled interval, it will stack or skip.
+              Compares the latest run duration (from scheduler.log) or the scan window (earliest→latest) against the cron interval.
+              A ratio &gt;1x means the search scans more time than the interval allows, causing overlap or skipping.
               {runTimesLoading && <span className="ml-1 text-brand-400">Loading run times...</span>}
             </p>
             <div className="flex gap-6 text-[10px]">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-gray-400">≤ 50% of interval — Efficient</span>
+                <span className="text-gray-400">≤ 1x — Efficient (window fits in interval)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                <span className="text-gray-400">50–80% of interval — Tight</span>
+                <span className="text-gray-400">1–2x — Some overlap</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                <span className="text-gray-400">&gt; 80% of interval — At risk</span>
+                <span className="text-gray-400">&gt; 2x — Heavy overlap</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-500" />
-                <span className="text-gray-400">No run data</span>
+                <span className="text-gray-400">No data</span>
               </div>
             </div>
           </div>
