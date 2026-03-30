@@ -126,20 +126,17 @@ export function SHCPage() {
         )}
 
         {chartData.length > 0 && (
-          <div className="rounded-xl border border-surface-border bg-surface-raised p-4">
-            <h3 className="text-xs font-semibold text-white mb-3">Captain Role Over Time</h3>
-            <div style={{ height: 350 }}>
-              <LineChart
-                data={chartData}
-                index="_time"
-                categories={chartCategories}
-                colors={NEON_COLORS.slice(0, chartCategories.length)}
-                yAxisWidth={32}
-                showAnimation
-                showLegend
-                style={{ height: 350, width: "100%" }}
-              />
-            </div>
+          <div className="-mx-6 px-4" style={{ height: 400 }}>
+            <LineChart
+              data={chartData}
+              index="_time"
+              categories={chartCategories}
+              colors={NEON_COLORS.slice(0, chartCategories.length)}
+              yAxisWidth={32}
+              showAnimation
+              showLegend
+              style={{ height: 400, width: "100%" }}
+            />
           </div>
         )}
 
