@@ -6,35 +6,47 @@ import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import { CopyButton } from "../components/common/CopyButton";
 
-const DEFAULT_SPL = `index=_internal sourcetype=splunkd group=searchscheduler host IN (sh*)
+const BASE_SPL = `index=_internal sourcetype=splunkd group=searchscheduler host IN (sh*)
 | eval state=if(delegated>0, "captain", "non-captain")
 | search state="captain"
-| timechart span=1m distinct_count(state) by host`;
+| timechart span=SPAN distinct_count(state) by host`;
+
+const RANGE_CONFIG: Record<string, { span: string; fmt: Intl.DateTimeFormatOptions }> = {
+  "-1h":  { span: "1m",  fmt: { hour: "2-digit", minute: "2-digit" } },
+  "-4h":  { span: "5m",  fmt: { hour: "2-digit", minute: "2-digit" } },
+  "-24h": { span: "30m", fmt: { hour: "2-digit", minute: "2-digit" } },
+  "-7d":  { span: "4h",  fmt: { month: "short", day: "numeric", hour: "2-digit" } },
+};
 
 const NEON_COLORS = ["emerald", "cyan", "fuchsia", "amber", "violet", "rose", "teal", "indigo"];
 
 export function SHCPage() {
-  const [spl, setSpl] = useState(DEFAULT_SPL);
+  const [spl, setSpl] = useState(BASE_SPL.replace("SPAN", "5m"));
   const [chartData, setChartData] = useState<Record<string, string | number>[]>([]);
   const [chartCategories, setChartCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState("-4h");
+  const [span, setSpan] = useState("5m");
   const [showInfo, setShowInfo] = useState(false);
   const [editingSpl, setEditingSpl] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
 
-  const runSearch = useCallback(async (searchSpl?: string, range?: string) => {
+  const runSearch = useCallback(async (opts?: { searchSpl?: string; range?: string; spanOverride?: string }) => {
     setLoading(true);
     setError(null);
+    const effectiveRange = opts?.range || timeRange;
+    const effectiveSpan = opts?.spanOverride || span;
+    const cfg = RANGE_CONFIG[effectiveRange] || RANGE_CONFIG["-4h"];
+    const effectiveSpl = (opts?.searchSpl || spl).replace(/span=\S+/, `span=${effectiveSpan}`);
     try {
-      const res = await api.search(searchSpl || spl, range || timeRange, "now");
+      const res = await api.search(effectiveSpl, effectiveRange, "now");
       if (res.results?.length > 0) {
         const keys = Object.keys(res.results[0]).filter((k) => k !== "_time" && !k.startsWith("_"));
         setChartCategories(keys);
         setChartData(res.results.map((row) => {
           const point: Record<string, string | number> = {
-            _time: new Date(row._time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            _time: new Date(row._time).toLocaleString([], cfg.fmt),
           };
           keys.forEach((k) => { point[k] = Number(row[k]) || 0; });
           return point;
@@ -48,7 +60,7 @@ export function SHCPage() {
     } finally {
       setLoading(false);
     }
-  }, [spl, timeRange]);
+  }, [spl, timeRange, span]);
 
   // Auto-run on mount
   useEffect(() => { runSearch(); }, []);
@@ -79,12 +91,24 @@ export function SHCPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-gray-500">Range:</span>
-              <select value={timeRange} onChange={(e) => { setTimeRange(e.target.value); runSearch(spl, e.target.value); }}
+              <select value={timeRange} onChange={(e) => { const r = e.target.value; const s = RANGE_CONFIG[r]?.span || span; setTimeRange(r); setSpan(s); runSearch({ range: r, spanOverride: s }); }}
                 className="rounded border border-surface-border bg-surface px-2 py-1 text-[10px] text-gray-300 outline-none">
                 <option value="-1h">1h</option>
                 <option value="-4h">4h</option>
                 <option value="-24h">24h</option>
                 <option value="-7d">7d</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-500">Span:</span>
+              <select value={span} onChange={(e) => { setSpan(e.target.value); runSearch({ spanOverride: e.target.value }); }}
+                className="rounded border border-surface-border bg-surface px-2 py-1 text-[10px] text-gray-300 outline-none">
+                <option value="1m">1m</option>
+                <option value="5m">5m</option>
+                <option value="10m">10m</option>
+                <option value="30m">30m</option>
+                <option value="1h">1h</option>
+                <option value="4h">4h</option>
               </select>
             </div>
             <button onClick={() => runSearch()} disabled={loading}
