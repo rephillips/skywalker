@@ -21,6 +21,7 @@ export function SHCPage() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState("-4h");
   const [showInfo, setShowInfo] = useState(false);
+  const [editingSpl, setEditingSpl] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
 
   const runSearch = useCallback(async (searchSpl?: string, range?: string) => {
@@ -127,12 +128,26 @@ export function SHCPage() {
                 <SearchCode size={13} />
               </button>
               {showInfo && (
-                <div className="absolute right-0 bottom-8 z-50 w-96 rounded-xl border border-surface-border bg-surface-raised shadow-2xl p-3">
+                <div className="absolute right-0 bottom-8 z-50 w-[28rem] rounded-xl border border-surface-border bg-surface-raised shadow-2xl p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
-                    <CopyButton text={spl} />
+                    <div className="flex items-center gap-2">
+                      <CopyButton text={spl} />
+                      <button onClick={() => setEditingSpl(!editingSpl)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+                        {editingSpl ? "Cancel" : "Edit"}
+                      </button>
+                    </div>
                   </div>
-                  <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-48 overflow-auto">{spl}</pre>
+                  {editingSpl ? (
+                    <div className="flex flex-col gap-2">
+                      <textarea value={spl} onChange={(e) => setSpl(e.target.value)} rows={6}
+                        className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[10px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y" spellCheck={false} />
+                      <button onClick={() => { setEditingSpl(false); setShowInfo(false); runSearch(); }}
+                        className="self-start rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors">Run</button>
+                    </div>
+                  ) : (
+                    <pre className="text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all max-h-48 overflow-auto">{spl}</pre>
+                  )}
                 </div>
               )}
             </div>
