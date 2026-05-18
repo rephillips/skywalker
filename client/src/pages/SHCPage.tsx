@@ -49,38 +49,56 @@ function ClusterStatusPanel() {
       if (statusRes.status === "error") throw new Error(statusRes.message || "shcluster/status failed");
       if (membersRes.status === "error") throw new Error(membersRes.message || "shcluster/member/members failed");
 
-      // shcluster/status returns a single entry whose content has flat dot-notation
-      // keys: captain.label, captain.mgmt_uri, captain.elected_captain, etc.
-      const statusContent = statusRes.data?.entry?.[0]?.content ?? {};
       const memberEntries: any[] = membersRes.data?.entry ?? [];
       const memberInfo = memberInfoRes.status === "ok" ? (memberInfoRes.data?.entry?.[0]?.content ?? {}) : {};
 
-      setRawData({ statusContent, memberInfo, members: memberEntries.map((m: any) => ({ name: m.name, ...m.content })) });
+      // shcluster/status: try both flat dot-notation keys and nested entry named "captain"
+      const allStatusEntries: any[] = statusRes.data?.entry ?? [];
+      const captainStatusEntry = allStatusEntries.find((e: any) => e.name === "captain") ?? allStatusEntries[0];
+      const statusContent = captainStatusEntry?.content ?? {};
 
-      const captainUri: string = statusContent["captain.mgmt_uri"] || memberInfo.captain_uri || "";
+      setRawData({
+        statusEntries: allStatusEntries.map((e: any) => ({ name: e.name, content: e.content })),
+        memberInfo,
+        members: memberEntries.map((m: any) => ({ name: m.name, ...m.content })),
+      });
+
+      // Primary: find captain from members list via is_captain flag — most reliable
+      const captainMember = memberEntries.find((m: any) => {
+        const v = m.content?.is_captain;
+        return v === "1" || v === true || v === 1;
+      });
+
+      // Fallback: match captain_uri from member/info against members' mgmt_uri
+      const captainUri: string = memberInfo.captain_uri || statusContent["captain.mgmt_uri"] || statusContent.mgmt_uri || "";
       const normalise = (uri: string) => uri.replace(/\/+$/, "").toLowerCase();
-      const matchedMember = captainUri
+      const uriMatchedMember = !captainMember && captainUri
         ? memberEntries.find((m: any) => normalise(m.content?.mgmt_uri || "") === normalise(captainUri))
         : null;
 
+      const resolvedCaptainMember = captainMember ?? uriMatchedMember;
+
       const captainLabel =
+        resolvedCaptainMember?.content?.label ||
+        resolvedCaptainMember?.name ||
         statusContent["captain.label"] ||
-        matchedMember?.content?.label ||
-        matchedMember?.name ||
+        statusContent.label ||
         (captainUri ? (() => { try { return new URL(captainUri).hostname; } catch { return null; } })() : null) ||
         "unknown";
 
+      const electedCaptain =
+        statusContent["captain.elected_captain"] ||
+        statusContent.elected_captain ||
+        memberInfo.elected_captain;
+
       const captainContent = {
-        label:                statusContent["captain.label"],
-        elected_captain:      statusContent["captain.elected_captain"],
-        mgmt_uri:             statusContent["captain.mgmt_uri"],
-        dynamic_captain:      statusContent["captain.dynamic_captain"],
-        initialized_flag:     statusContent["captain.initialized_flag"],
-        service_ready_flag:   statusContent["captain.service_ready_flag"],
-        rolling_restart_flag: statusContent["captain.rolling_restart_flag"],
-        id:                   statusContent["captain.id"],
         _resolvedLabel:       captainLabel,
-        _captainUri:          captainUri,
+        _captainUri:          resolvedCaptainMember?.content?.mgmt_uri || captainUri,
+        elected_captain:      electedCaptain,
+        dynamic_captain:      statusContent["captain.dynamic_captain"] ?? statusContent.dynamic_captain,
+        initialized_flag:     statusContent["captain.initialized_flag"] ?? statusContent.initialized_flag,
+        service_ready_flag:   statusContent["captain.service_ready_flag"] ?? statusContent.service_ready_flag,
+        rolling_restart_flag: statusContent["captain.rolling_restart_flag"] ?? statusContent.rolling_restart_flag,
       };
 
       setCaptain(captainContent);
@@ -186,10 +204,11 @@ function ClusterStatusPanel() {
                 <tbody>
                   {members.map((m: any) => {
                     const c = m.content || {};
-                    const normalise = (u: string) => (u || "").replace(/\/+$/, "").toLowerCase();
-                    const isCaptain = captain?._captainUri
-                      ? normalise(c.mgmt_uri) === normalise(captain._captainUri)
-                      : c.label === captain?._resolvedLabel;
+                    const isCaptain =
+                      c.is_captain === "1" || c.is_captain === true || c.is_captain === 1 ||
+                      (captain?._captainUri && c.mgmt_uri &&
+                        c.mgmt_uri.replace(/\/+$/, "").toLowerCase() === captain._captainUri.replace(/\/+$/, "").toLowerCase()) ||
+                      (c.label && c.label === captain?._resolvedLabel);
                     const status = c.status || "Unknown";
                     const statusUp = status === "Up";
                     const hbSecs = Number(c.last_heartbeat || 0);
