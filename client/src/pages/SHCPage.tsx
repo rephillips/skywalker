@@ -34,6 +34,8 @@ function ClusterStatusPanel() {
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rawData, setRawData] = useState<any>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,24 +52,26 @@ function ClusterStatusPanel() {
       const captainEntry = statusRes.data?.entry?.find((e: any) => e.name === "captain") || statusRes.data?.entry?.[0];
       const captainContent = captainEntry?.content ?? null;
       const memberEntries: any[] = membersRes.data?.entry ?? [];
-
-      // shcluster/member/info gives us captain_uri — use it to find the captain's
-      // label by matching against mgmt_uri in the members list (more reliable than
-      // relying on shcluster/status to populate label)
       const memberInfo = memberInfoRes.status === "ok" ? (memberInfoRes.data?.entry?.[0]?.content ?? {}) : {};
-      const captainUri: string = memberInfo.captain_uri || captainContent?.mgmt_uri || "";
 
-      // Normalise URIs for comparison (strip trailing slashes)
+      // Save raw for debugging
+      setRawData({ status: captainContent, memberInfo, members: memberEntries.map((m: any) => m.content) });
+
+      const captainUri: string = memberInfo.captain_uri || captainContent?.mgmt_uri || "";
       const normalise = (uri: string) => uri.replace(/\/+$/, "").toLowerCase();
       const matchedCaptain = captainUri
         ? memberEntries.find((m: any) => normalise(m.content?.mgmt_uri || "") === normalise(captainUri))
         : null;
 
+      // Try every possible field name Splunk uses across versions
       const captainLabel =
         matchedCaptain?.content?.label ||
+        matchedCaptain?.name ||
         captainContent?.label ||
-        (captainUri ? new URL(captainUri).hostname : null) ||
+        memberInfo?.label ||
+        (captainUri ? (() => { try { return new URL(captainUri).hostname; } catch { return null; } })() : null) ||
         captainContent?.peer_scheme_host_port ||
+        captainEntry?.name ||
         "unknown";
 
       setCaptain({ ...captainContent, _resolvedLabel: captainLabel, _captainUri: captainUri });
@@ -96,12 +100,28 @@ function ClusterStatusPanel() {
           <h3 className="text-xs font-semibold text-white">Cluster Status</h3>
           <span className="text-[10px] text-gray-500">via /services/shcluster/status</span>
         </div>
-        <button onClick={load} disabled={loading}
-          className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
-          {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {rawData && (
+            <button onClick={() => setShowRaw(s => !s)}
+              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+              {showRaw ? "Hide raw" : "Show raw"}
+            </button>
+          )}
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
+            {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {showRaw && rawData && (
+        <div className="p-3 border-b border-surface-border">
+          <pre className="text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-64 overflow-auto bg-surface rounded p-2">
+            {JSON.stringify(rawData, null, 2)}
+          </pre>
+        </div>
+      )}
 
       {error && <div className="p-3"><ErrorAlert message={error} /></div>}
 
