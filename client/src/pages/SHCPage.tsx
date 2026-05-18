@@ -252,6 +252,7 @@ function CardBack({ title, formula, substituted, description }: { title: string;
 
 function ConcurrencyPanel() {
   const [content, setContent] = useState<any>(null);
+  const [captainIsAdhoc, setCaptainIsAdhoc] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
@@ -260,21 +261,25 @@ function ConcurrencyPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [concurrencyRes, searchConfRes, schedulerConfRes] = await Promise.all([
+      const [concurrencyRes, searchConfRes, schedulerConfRes, shclusteringRes] = await Promise.all([
         api.proxy("server/status/limits/search-concurrency?cluster_wide_quota=1"),
         api.proxy("configs/conf-limits/search"),
         api.proxy("configs/conf-limits/scheduler"),
+        api.proxy("configs/conf-server/shclustering"),
       ]);
       if (concurrencyRes.status === "error") throw new Error(concurrencyRes.message || "search-concurrency failed");
 
-      const concurrency = concurrencyRes.data?.entry?.[0]?.content ?? {};
-      // Prefer conf-limits values (what's actually configured) over runtime-derived
-      const searchConf = searchConfRes.status === "ok" ? (searchConfRes.data?.entry?.[0]?.content ?? {}) : {};
-      const schedConf  = schedulerConfRes.status === "ok" ? (schedulerConfRes.data?.entry?.[0]?.content ?? {}) : {};
+      const concurrency  = concurrencyRes.data?.entry?.[0]?.content ?? {};
+      const searchConf   = searchConfRes.status === "ok"    ? (searchConfRes.data?.entry?.[0]?.content ?? {})    : {};
+      const schedConf    = schedulerConfRes.status === "ok" ? (schedulerConfRes.data?.entry?.[0]?.content ?? {}) : {};
+      const shcConf      = shclusteringRes.status === "ok"  ? (shclusteringRes.data?.entry?.[0]?.content ?? {})  : {};
+
+      // captain_is_adhoc_searchhead defaults to true in Splunk
+      const rawVal = shcConf.captain_is_adhoc_searchhead;
+      setCaptainIsAdhoc(rawVal === undefined ? true : rawVal === "1" || rawVal === true || rawVal === "true");
 
       setContent({
         ...concurrency,
-        // Overlay with authoritative conf values where available
         ...(searchConf.base_max_searches    !== undefined && { base_max_searches:    searchConf.base_max_searches }),
         ...(searchConf.max_searches_per_cpu !== undefined && { max_searches_per_cpu: searchConf.max_searches_per_cpu }),
         ...(schedConf.max_searches_perc     !== undefined && { max_searches_perc:    schedConf.max_searches_perc }),
@@ -299,19 +304,24 @@ function ConcurrencyPanel() {
   const members        = maxHist > 0 ? Math.round(clusterTotal / maxHist) : 1;
   const cpus           = maxPerCpu > 0 ? Math.round((maxHist - baseMax) / maxPerCpu) : 0;
 
+  // When captain_is_adhoc_searchhead=false the captain is dedicated to coordination
+  // only and does not run searches — effective search pool is (members - 1)
+  const searchMembers  = captainIsAdhoc === false ? members - 1 : members;
+
   // max_searches_perc comes back as a decimal (0.5) from the REST API
   const rawPerc        = num("max_searches_perc");
-  const schedPerc      = rawPerc > 1 ? rawPerc / 100 : rawPerc;      // normalise
+  const schedPerc      = rawPerc > 1 ? rawPerc / 100 : rawPerc;
   const rawAutoPerc    = num("auto_summary_perc");
   const autoPerc       = rawAutoPerc > 1 ? rawAutoPerc / 100 : rawAutoPerc;
 
   const perNodeSched   = Math.floor(maxHist * schedPerc);
-  const clusterSched   = perNodeSched * members;
+  const clusterSched   = perNodeSched * searchMembers;
   const perNodeAuto    = Math.floor(perNodeSched * autoPerc);
-  const clusterAuto    = perNodeAuto * members;
+  const clusterAuto    = perNodeAuto * searchMembers;
 
   const schedPct       = Math.round(schedPerc * 100);
   const autoPct        = Math.round(autoPerc * 100);
+  const effectiveTotal = maxHist * searchMembers;
 
   return (
     <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised">
@@ -320,6 +330,12 @@ function ConcurrencyPanel() {
           <Gauge size={14} className="text-cyan-400" />
           <h3 className="text-xs font-semibold text-white">Search Concurrency Limits</h3>
           <span className="text-[10px] text-gray-500">search-concurrency + conf-limits/search + conf-limits/scheduler · click cards to see formula</span>
+          {captainIsAdhoc !== null && (
+            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${captainIsAdhoc ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
+              {captainIsAdhoc ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
+              Captain {captainIsAdhoc ? "is adhoc SH" : "dedicated (not adhoc SH)"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowRaw(s => !s)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
@@ -350,17 +366,25 @@ function ConcurrencyPanel() {
               front={
                 <CardFront
                   title="Cluster Total Slots"
-                  value={clusterTotal}
-                  subtitle={`Adhoc + scheduled across ${members} member${members !== 1 ? "s" : ""}`}
+                  value={effectiveTotal}
+                  subtitle={captainIsAdhoc === false
+                    ? `${searchMembers} of ${members} members run searches (captain dedicated)`
+                    : `Adhoc + scheduled across ${members} member${members !== 1 ? "s" : ""}`}
                   accent="text-cyan-300"
                 />
               }
               back={
                 <CardBack
                   title="Cluster Total Slots"
-                  formula={`(max_searches_per_cpu × CPUs\n + base_max_searches) × members`}
-                  substituted={`(${maxPerCpu} × ${cpus} + ${baseMax}) × ${members} = ${clusterTotal}`}
-                  description="Total concurrent searches (adhoc + scheduled) across the deployment"
+                  formula={captainIsAdhoc === false
+                    ? `(max_searches_per_cpu × CPUs\n + base_max_searches)\n × (members − 1)`
+                    : `(max_searches_per_cpu × CPUs\n + base_max_searches) × members`}
+                  substituted={captainIsAdhoc === false
+                    ? `(${maxPerCpu} × ${cpus} + ${baseMax}) × (${members}−1) = ${effectiveTotal}`
+                    : `(${maxPerCpu} × ${cpus} + ${baseMax}) × ${members} = ${effectiveTotal}`}
+                  description={captainIsAdhoc === false
+                    ? "Captain is dedicated — excluded from search pool (captain_is_adhoc_searchhead=false)"
+                    : "Total concurrent searches (adhoc + scheduled) across the deployment"}
                 />
               }
             />
@@ -376,9 +400,9 @@ function ConcurrencyPanel() {
               back={
                 <CardBack
                   title="Cluster Scheduled"
-                  formula={`⌊(max_searches_per_cpu × CPUs\n + base_max_searches)\n × max_searches_perc⌋ × members`}
-                  substituted={`⌊(${maxPerCpu}×${cpus}+${baseMax}) × ${schedPct}%⌋ × ${members} = ${clusterSched}`}
-                  description="Max scheduled searches the captain will distribute cluster-wide"
+                  formula={`⌊(max_searches_per_cpu × CPUs\n + base_max_searches)\n × max_searches_perc⌋ × search_members`}
+                  substituted={`⌊(${maxPerCpu}×${cpus}+${baseMax}) × ${schedPct}%⌋ × ${searchMembers} = ${clusterSched}`}
+                  description="Max scheduled searches distributed across search-eligible members"
                 />
               }
             />
@@ -394,8 +418,8 @@ function ConcurrencyPanel() {
               back={
                 <CardBack
                   title="Cluster Auto-Summary"
-                  formula={`⌊(scheduled_per_node\n × auto_summary_perc)⌋ × members`}
-                  substituted={`⌊${perNodeSched} × ${autoPct}%⌋ × ${members} = ${clusterAuto}`}
+                  formula={`⌊(scheduled_per_node\n × auto_summary_perc)⌋ × search_members`}
+                  substituted={`⌊${perNodeSched} × ${autoPct}%⌋ × ${searchMembers} = ${clusterAuto}`}
                   description="Slots reserved for report acceleration & data model acceleration"
                 />
               }
