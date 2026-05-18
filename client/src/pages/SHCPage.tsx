@@ -39,15 +39,39 @@ function ClusterStatusPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [statusRes, membersRes] = await Promise.all([
+      const [statusRes, membersRes, memberInfoRes] = await Promise.all([
         api.proxy("shcluster/status"),
         api.proxy("shcluster/member/members"),
+        api.proxy("shcluster/member/info"),
       ]);
       if (statusRes.status === "error") throw new Error(statusRes.message || "shcluster/status failed");
       if (membersRes.status === "error") throw new Error(membersRes.message || "shcluster/member/members failed");
+
       const captainEntry = statusRes.data?.entry?.find((e: any) => e.name === "captain") || statusRes.data?.entry?.[0];
-      setCaptain(captainEntry?.content ?? null);
-      setMembers(membersRes.data?.entry ?? []);
+      const captainContent = captainEntry?.content ?? null;
+      const memberEntries: any[] = membersRes.data?.entry ?? [];
+
+      // shcluster/member/info gives us captain_uri — use it to find the captain's
+      // label by matching against mgmt_uri in the members list (more reliable than
+      // relying on shcluster/status to populate label)
+      const memberInfo = memberInfoRes.status === "ok" ? (memberInfoRes.data?.entry?.[0]?.content ?? {}) : {};
+      const captainUri: string = memberInfo.captain_uri || captainContent?.mgmt_uri || "";
+
+      // Normalise URIs for comparison (strip trailing slashes)
+      const normalise = (uri: string) => uri.replace(/\/+$/, "").toLowerCase();
+      const matchedCaptain = captainUri
+        ? memberEntries.find((m: any) => normalise(m.content?.mgmt_uri || "") === normalise(captainUri))
+        : null;
+
+      const captainLabel =
+        matchedCaptain?.content?.label ||
+        captainContent?.label ||
+        (captainUri ? new URL(captainUri).hostname : null) ||
+        captainContent?.peer_scheme_host_port ||
+        "unknown";
+
+      setCaptain({ ...captainContent, _resolvedLabel: captainLabel, _captainUri: captainUri });
+      setMembers(memberEntries);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -57,7 +81,7 @@ function ClusterStatusPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const captainLabel = captain?.label || captain?.peer_scheme_host_port || "unknown";
+  const captainLabel = captain?._resolvedLabel || "unknown";
   const electedSecs = Number(captain?.elected_captain || 0);
   const dynamic = captain?.dynamic_captain === "1" || captain?.dynamic_captain === true;
   const serviceReady = captain?.service_ready_flag === "1" || captain?.service_ready_flag === true;
@@ -133,7 +157,10 @@ function ClusterStatusPanel() {
                 <tbody>
                   {members.map((m: any) => {
                     const c = m.content || {};
-                    const isCaptain = c.label === captain?.label;
+                    const normalise = (u: string) => (u || "").replace(/\/+$/, "").toLowerCase();
+                    const isCaptain = captain?._captainUri
+                      ? normalise(c.mgmt_uri) === normalise(captain._captainUri)
+                      : c.label === captain?._resolvedLabel;
                     const status = c.status || "Unknown";
                     const statusUp = status === "Up";
                     const hbSecs = Number(c.last_heartbeat || 0);
