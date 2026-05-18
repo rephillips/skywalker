@@ -19,11 +19,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search(spl: string, earliest?: string, latest?: string) {
+  search(spl: string, earliest?: string, latest?: string, timeout?: number) {
     return request<SplunkSearchResponse>("/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ spl, earliest, latest }),
+      body: JSON.stringify({ spl, earliest, latest, timeout }),
     });
   },
 
