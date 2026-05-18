@@ -11,13 +11,13 @@ const router = Router();
 // Synchronous search: run SPL, poll until done, return results
 router.post("/search", async (req, res, next) => {
   try {
-    const { spl, earliest, latest } = req.body;
+    const { spl, earliest, latest, timeout } = req.body;
     if (!spl) {
       res.status(400).json({ error: "spl field is required" });
       return;
     }
     console.log(`[Search] SPL: ${spl}  earliest=${earliest}  latest=${latest}`);
-    const results = await executeSearch(spl, earliest, latest);
+    const results = await executeSearch(spl, earliest, latest, timeout ? Number(timeout) : undefined);
     console.log(`[Search] Results: ${results?.results?.length ?? 0} rows, fields: ${JSON.stringify(results?.fields?.map((f: any) => f.name))}`);
     res.json(results);
   } catch (err) {

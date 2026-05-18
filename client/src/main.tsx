@@ -15,6 +15,7 @@ import { SkippedSearchesPage } from "./pages/SkippedSearchesPage";
 import { SlowSearchesPage } from "./pages/SlowSearchesPage";
 import { ScheduledSearchesPage } from "./pages/ScheduledSearchesPage";
 import { SHCPage } from "./pages/SHCPage";
+import { DiagnosticsPage } from "./pages/DiagnosticsPage";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -34,6 +35,7 @@ const router = createBrowserRouter([
       { path: "btool", element: <BtoolPage /> },
       { path: "audits/scheduled-searches", element: <ScheduledSearchesPage /> },
       { path: "shc", element: <SHCPage /> },
+      { path: "diagnostics", element: <DiagnosticsPage /> },
       { path: "monitoring/:section", element: <PlaceholderPage /> },
       { path: "security", element: <PlaceholderPage /> },
     ],
