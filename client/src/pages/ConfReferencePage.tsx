@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { FileText, ExternalLink, Loader2, Search, ChevronDown } from "lucide-react";
+import { useState, useRef } from "react";
+import { FileText, ExternalLink, Loader2, Search, ChevronDown, Terminal, CornerDownLeft } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
+import { CopyButton } from "../components/common/CopyButton";
 
 const CONF_FILES = [
   "admon", "alert_actions", "app", "audit", "authentication", "authorize",
@@ -25,6 +26,163 @@ function getDocsUrl(name: string): string {
 interface Stanza {
   name: string;
   attributes: { key: string; value: string }[];
+}
+
+function DirectLookup({ confFiles }: { confFiles: string[] }) {
+  const [confFile, setConfFile] = useState("");
+  const [stanza, setStanza] = useState("");
+  const [result, setResult] = useState<{ name: string; attributes: { key: string; value: string }[] }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [endpoint, setEndpoint] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const stanzaRef = useRef<HTMLInputElement>(null);
+
+  const run = async () => {
+    const file = confFile.trim().replace(/\.conf$/, "");
+    const stanzaName = stanza.trim();
+    if (!file) return;
+
+    // Single stanza: /configs/conf-{file}/{stanza}
+    // All stanzas:   /configs/conf-{file}?count=0
+    const path = stanzaName
+      ? `configs/conf-${file}/${encodeURIComponent(stanzaName)}`
+      : `configs/conf-${file}?count=0`;
+
+    setLoading(true);
+    setError(null);
+    setResult([]);
+    setEndpoint(`/services/${path.replace("?count=0", "")}${stanzaName ? "" : "?count=0&output_mode=json"}`);
+
+    try {
+      const res = await api.proxy(path);
+      if (res.status === "error") throw new Error(res.message || "Request failed");
+      const entries: any[] = res.data?.entry ?? [];
+      const parsed = entries.map((entry: any) => {
+        const attrs: { key: string; value: string }[] = Object.entries(entry.content ?? {})
+          .filter(([k]) => !k.startsWith("eai:"))
+          .map(([k, v]) => ({ key: k, value: String(v) }))
+          .sort((a, b) => a.key.localeCompare(b.key));
+        return { name: entry.name, attributes: attrs };
+      });
+      setResult(parsed);
+      setExpanded(new Set(parsed.map((s) => s.name)));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") run();
+  };
+
+  const toggleStanza = (name: string) =>
+    setExpanded((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
+
+  return (
+    <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+      {/* Input bar */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-border">
+        <Terminal size={14} className="text-brand-400 shrink-0" />
+        <span className="text-[10px] text-gray-500 shrink-0">conf file</span>
+        <div className="relative">
+          <input
+            list="conf-files-list"
+            value={confFile}
+            onChange={(e) => setConfFile(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { stanzaRef.current?.focus(); } if (e.key === "Tab" && !stanza) stanzaRef.current?.focus(); }}
+            className="w-36 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
+            placeholder="limits"
+            autoComplete="off"
+          />
+          <datalist id="conf-files-list">
+            {confFiles.map((f) => <option key={f} value={f} />)}
+          </datalist>
+        </div>
+        <span className="text-gray-600 font-mono text-xs">/</span>
+        <span className="text-[10px] text-gray-500 shrink-0">stanza</span>
+        <input
+          ref={stanzaRef}
+          value={stanza}
+          onChange={(e) => setStanza(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="w-40 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
+          placeholder="search  (blank = all)"
+        />
+        <button
+          onClick={run}
+          disabled={loading || !confFile.trim()}
+          className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-40"
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : <CornerDownLeft size={12} />}
+          Fetch
+        </button>
+        {endpoint && (
+          <div className="flex items-center gap-1.5 ml-2 min-w-0">
+            <code className="text-[10px] font-mono text-blue-400/70 truncate">{endpoint}</code>
+            <CopyButton text={endpoint} />
+          </div>
+        )}
+      </div>
+
+      {error && <div className="p-3"><ErrorAlert message={error} /></div>}
+
+      {!error && result.length > 0 && (
+        <div className="p-3 flex flex-col gap-2 max-h-[60vh] overflow-auto">
+          {result.length > 1 && (
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-[10px] text-gray-500">{result.length} stanzas</span>
+              <button onClick={() => setExpanded(new Set(result.map(s => s.name)))} className="text-[10px] text-gray-500 hover:text-gray-300">Expand all</button>
+              <button onClick={() => setExpanded(new Set())} className="text-[10px] text-gray-500 hover:text-gray-300">Collapse all</button>
+            </div>
+          )}
+          {result.map((stanza) => {
+            const isExpanded = expanded.has(stanza.name);
+            return (
+              <div key={stanza.name} className="rounded-lg border border-surface-border overflow-hidden">
+                <button
+                  onClick={() => toggleStanza(stanza.name)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover transition-colors"
+                >
+                  <ChevronDown size={11} className={clsx("shrink-0 text-gray-500 transition-transform", isExpanded && "rotate-180")} />
+                  <code className="text-sm font-mono text-brand-400">[{stanza.name}]</code>
+                  <span className="text-[10px] text-gray-500 ml-auto">{stanza.attributes.length} attrs</span>
+                </button>
+                {isExpanded && (
+                  <div className="border-t border-surface-border">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {stanza.attributes.map((attr) => (
+                          <tr key={attr.key} className="border-b border-surface-border/30 hover:bg-surface-hover/40">
+                            <td className="px-3 py-1.5 text-xs font-mono text-emerald-400/80 whitespace-nowrap w-1/3 align-top">{attr.key}</td>
+                            <td className="px-3 py-1.5 text-xs font-mono text-gray-300 break-all">
+                              {attr.value === "" ? <span className="text-gray-600 italic">empty</span> : attr.value}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!error && !loading && result.length === 0 && endpoint && (
+        <p className="px-4 py-3 text-xs text-gray-500">No results</p>
+      )}
+
+      {!endpoint && (
+        <p className="px-4 py-3 text-[11px] text-gray-600">
+          Type a conf file name and optional stanza, then press Fetch or Enter. Leave stanza blank to load all stanzas (uses <code className="font-mono">count=0</code> — no row limit).
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function ConfReferencePage() {
@@ -137,11 +295,12 @@ export function ConfReferencePage() {
 
         {/* Right content */}
         <div className="flex-1 overflow-auto p-6">
+          <DirectLookup confFiles={CONF_FILES} />
           {!selected ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 py-20">
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 py-12">
               <FileText size={32} className="mb-3 text-gray-600" />
-              <p className="text-sm">Select a conf file from the list</p>
-              <p className="text-xs text-gray-600 mt-1">View stanzas, attributes, and their values</p>
+              <p className="text-sm">Select a conf file from the sidebar</p>
+              <p className="text-xs text-gray-600 mt-1">Or use the lookup above to jump to a specific file and stanza</p>
             </div>
           ) : (
             <div className="max-w-4xl">
