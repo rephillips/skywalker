@@ -49,32 +49,41 @@ function ClusterStatusPanel() {
       if (statusRes.status === "error") throw new Error(statusRes.message || "shcluster/status failed");
       if (membersRes.status === "error") throw new Error(membersRes.message || "shcluster/member/members failed");
 
-      const captainEntry = statusRes.data?.entry?.find((e: any) => e.name === "captain") || statusRes.data?.entry?.[0];
-      const captainContent = captainEntry?.content ?? null;
+      // shcluster/status returns a single entry whose content has flat dot-notation
+      // keys: captain.label, captain.mgmt_uri, captain.elected_captain, etc.
+      const statusContent = statusRes.data?.entry?.[0]?.content ?? {};
       const memberEntries: any[] = membersRes.data?.entry ?? [];
       const memberInfo = memberInfoRes.status === "ok" ? (memberInfoRes.data?.entry?.[0]?.content ?? {}) : {};
 
-      // Save raw for debugging
-      setRawData({ status: captainContent, memberInfo, members: memberEntries.map((m: any) => m.content) });
+      setRawData({ statusContent, memberInfo, members: memberEntries.map((m: any) => ({ name: m.name, ...m.content })) });
 
-      const captainUri: string = memberInfo.captain_uri || captainContent?.mgmt_uri || "";
+      const captainUri: string = statusContent["captain.mgmt_uri"] || memberInfo.captain_uri || "";
       const normalise = (uri: string) => uri.replace(/\/+$/, "").toLowerCase();
-      const matchedCaptain = captainUri
+      const matchedMember = captainUri
         ? memberEntries.find((m: any) => normalise(m.content?.mgmt_uri || "") === normalise(captainUri))
         : null;
 
-      // Try every possible field name Splunk uses across versions
       const captainLabel =
-        matchedCaptain?.content?.label ||
-        matchedCaptain?.name ||
-        captainContent?.label ||
-        memberInfo?.label ||
+        statusContent["captain.label"] ||
+        matchedMember?.content?.label ||
+        matchedMember?.name ||
         (captainUri ? (() => { try { return new URL(captainUri).hostname; } catch { return null; } })() : null) ||
-        captainContent?.peer_scheme_host_port ||
-        captainEntry?.name ||
         "unknown";
 
-      setCaptain({ ...captainContent, _resolvedLabel: captainLabel, _captainUri: captainUri });
+      const captainContent = {
+        label:                statusContent["captain.label"],
+        elected_captain:      statusContent["captain.elected_captain"],
+        mgmt_uri:             statusContent["captain.mgmt_uri"],
+        dynamic_captain:      statusContent["captain.dynamic_captain"],
+        initialized_flag:     statusContent["captain.initialized_flag"],
+        service_ready_flag:   statusContent["captain.service_ready_flag"],
+        rolling_restart_flag: statusContent["captain.rolling_restart_flag"],
+        id:                   statusContent["captain.id"],
+        _resolvedLabel:       captainLabel,
+        _captainUri:          captainUri,
+      };
+
+      setCaptain(captainContent);
       setMembers(memberEntries);
     } catch (err) {
       setError((err as Error).message);
