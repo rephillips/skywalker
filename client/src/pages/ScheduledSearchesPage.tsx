@@ -215,8 +215,7 @@ function LoggerPanel() {
     try {
       const res = await api.proxy(`server/logger/${encodeURIComponent(name.trim())}`);
       if (res.status === "error") throw new Error(res.message || "Logger not found");
-      const level = res.data?.entry?.[0]?.content?.level as LogLevel | undefined;
-      setCurrentLevel(level ?? null);
+      setCurrentLevel((res.data?.entry?.[0]?.content?.level as LogLevel) ?? null);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -224,20 +223,19 @@ function LoggerPanel() {
     }
   }, [loggerName]);
 
-  const setLevel = async (level: LogLevel) => {
+  // Auto-fetch SavedSplunker on mount
+  useEffect(() => { fetchLevel("SavedSplunker"); }, []);
+
+  const setLevel = async (name: string, level: LogLevel) => {
     setSetting(level);
     setError(null);
     setSuccessMsg(null);
     try {
-      const res = await api.proxy(
-        `server/logger/${encodeURIComponent(loggerName.trim())}`,
-        "POST",
-        `level=${level}`
-      );
+      const res = await api.proxy(`server/logger/${encodeURIComponent(name.trim())}`, "POST", `level=${level}`);
       if (res.status === "error") throw new Error(res.message || "Failed to set log level");
       setCurrentLevel(level);
-      setSuccessMsg(`${loggerName} log level set to ${level}`);
-      setTimeout(() => setSuccessMsg(null), 4000);
+      setSuccessMsg(`${name} set to ${level}`);
+      setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -245,91 +243,138 @@ function LoggerPanel() {
     }
   };
 
+  const isDebug = currentLevel === "DEBUG";
+
   return (
     <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-border">
         <Bug size={14} className="text-violet-400 shrink-0" />
-        <h3 className="text-xs font-semibold text-white">Logger Control</h3>
-        <span className="text-[10px] text-gray-500">via /services/server/logger/{"{name}"}</span>
+        <h3 className="text-xs font-semibold text-white">Scheduler Logger Control</h3>
+        <span className="text-[10px] text-gray-500">POST /services/server/logger/{"{name}"} — resets on Splunk restart</span>
       </div>
 
-      <div className="px-4 py-3 flex flex-wrap items-center gap-3">
-        {/* Logger name input */}
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] text-gray-500 shrink-0">Logger</label>
-          <input
-            value={loggerName}
-            onChange={(e) => setLoggerName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && fetchLevel()}
-            list="common-loggers"
-            className="w-44 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
-            placeholder="SavedSplunker"
-          />
-          <datalist id="common-loggers">
-            {COMMON_LOGGERS.map((l) => <option key={l} value={l} />)}
-          </datalist>
-          <button
-            onClick={() => fetchLevel()}
-            disabled={loading || !loggerName.trim()}
-            className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-40"
-          >
-            {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-            Fetch
-          </button>
-        </div>
-
-        {/* Current level badge */}
-        {currentLevel && (
-          <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-mono font-semibold ${LEVEL_COLORS[currentLevel]}`}>
-            Current: {currentLevel}
-          </span>
-        )}
-
-        {/* Common loggers quick-pick */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[9px] text-gray-600 uppercase tracking-wide">Quick</span>
-          {COMMON_LOGGERS.map((l) => (
+      <div className="flex items-stretch divide-x divide-surface-border">
+        {/* SavedSplunker quick toggle — left panel */}
+        <div className="flex flex-col justify-between gap-3 px-5 py-4 min-w-[260px]">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-semibold text-white font-mono">SavedSplunker</span>
+              <span className="text-[9px] text-gray-500">scheduler component</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500">Current level</span>
+              {loading && <Loader2 size={11} className="animate-spin text-gray-500" />}
+              {!loading && currentLevel && (
+                <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-mono font-bold ${LEVEL_COLORS[currentLevel]}`}>
+                  {currentLevel}
+                </span>
+              )}
+              {!loading && !currentLevel && !error && (
+                <span className="text-[10px] text-gray-600">—</span>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2">
             <button
-              key={l}
-              onClick={() => { setLoggerName(l); fetchLevel(l); }}
-              className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${loggerName === l ? "border-brand-500/50 text-brand-400 bg-brand-500/10" : "border-surface-border text-gray-500 hover:text-gray-300 hover:bg-surface-hover"}`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Set level buttons — only shown after a successful fetch */}
-      {currentLevel && (
-        <div className="px-4 pb-3 flex items-center gap-2">
-          <span className="text-[10px] text-gray-500 shrink-0">Set level</span>
-          {LOG_LEVELS.map((level) => (
-            <button
-              key={level}
-              onClick={() => setLevel(level)}
-              disabled={!!setting || level === currentLevel}
-              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-mono font-medium transition-colors disabled:opacity-40 ${
-                level === currentLevel
-                  ? LEVEL_COLORS[level] + " cursor-default"
-                  : "border-surface-border text-gray-400 hover:bg-surface-hover hover:text-gray-200"
+              onClick={() => setLevel("SavedSplunker", "DEBUG")}
+              disabled={!!setting || isDebug}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                isDebug
+                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 cursor-default"
+                  : "border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
               }`}
             >
-              {setting === level && <Loader2 size={10} className="animate-spin" />}
-              {setting !== level && level === currentLevel && <Check size={10} />}
-              {level}
+              {setting === "DEBUG" ? <Loader2 size={11} className="animate-spin" /> : isDebug ? <Check size={11} /> : <Bug size={11} />}
+              Enable DEBUG
             </button>
-          ))}
-        </div>
-      )}
-
-      {error && <div className="px-4 pb-3"><ErrorAlert message={error} /></div>}
-      {successMsg && (
-        <div className="px-4 pb-3">
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
-            <CheckCircle size={12} />
-            {successMsg}
+            <button
+              onClick={() => setLevel("SavedSplunker", "INFO")}
+              disabled={!!setting || currentLevel === "INFO"}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                currentLevel === "INFO"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-default"
+                  : "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+              }`}
+            >
+              {setting === "INFO" ? <Loader2 size={11} className="animate-spin" /> : currentLevel === "INFO" ? <Check size={11} /> : <RefreshCw size={11} />}
+              Reset to INFO
+            </button>
           </div>
+        </div>
+
+        {/* General lookup — right panel */}
+        <div className="flex-1 px-5 py-4">
+          <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-2">Any logger</div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <input
+              value={loggerName}
+              onChange={(e) => setLoggerName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && fetchLevel()}
+              list="common-loggers"
+              className="w-44 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
+              placeholder="SavedSplunker"
+            />
+            <datalist id="common-loggers">
+              {COMMON_LOGGERS.map((l) => <option key={l} value={l} />)}
+            </datalist>
+            <button
+              onClick={() => fetchLevel()}
+              disabled={loading || !loggerName.trim()}
+              className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-40"
+            >
+              {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+              Fetch
+            </button>
+            {currentLevel && loggerName !== "SavedSplunker" && (
+              <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-mono font-bold ${LEVEL_COLORS[currentLevel]}`}>
+                {currentLevel}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="text-[9px] text-gray-600 mr-1 self-center">Quick</span>
+            {COMMON_LOGGERS.map((l) => (
+              <button
+                key={l}
+                onClick={() => { setLoggerName(l); fetchLevel(l); }}
+                className={`text-[10px] rounded px-2 py-0.5 border transition-colors ${
+                  loggerName === l ? "border-brand-500/50 text-brand-400 bg-brand-500/10" : "border-surface-border text-gray-500 hover:text-gray-300 hover:bg-surface-hover"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          {/* Set level buttons for arbitrary logger */}
+          {currentLevel && loggerName !== "SavedSplunker" && (
+            <div className="flex items-center gap-1.5 mt-3">
+              <span className="text-[10px] text-gray-500 shrink-0">Set</span>
+              {LOG_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  onClick={() => setLevel(loggerName, level)}
+                  disabled={!!setting || level === currentLevel}
+                  className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:opacity-40 ${
+                    level === currentLevel ? LEVEL_COLORS[level] + " cursor-default" : "border-surface-border text-gray-400 hover:bg-surface-hover hover:text-gray-200"
+                  }`}
+                >
+                  {setting === level && <Loader2 size={9} className="animate-spin" />}
+                  {level}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(error || successMsg) && (
+        <div className="px-5 pb-3 border-t border-surface-border pt-2">
+          {error && <ErrorAlert message={error} />}
+          {successMsg && (
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+              <CheckCircle size={12} /> {successMsg} — check $SPLUNK_HOME/var/log/splunk/scheduler.log
+            </div>
+          )}
         </div>
       )}
     </div>
