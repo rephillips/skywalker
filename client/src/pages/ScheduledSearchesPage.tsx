@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -184,6 +184,156 @@ function formatSeconds(sec: number): string {
   if (sec < 3600) return `${Math.round(sec / 60)}m`;
   if (sec < 86400) return `${Math.round(sec / 3600)}h`;
   return `${Math.round(sec / 86400)}d`;
+}
+
+const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"] as const;
+type LogLevel = typeof LOG_LEVELS[number];
+
+const LEVEL_COLORS: Record<LogLevel, string> = {
+  DEBUG: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
+  INFO:  "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+  WARN:  "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  ERROR: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+  FATAL: "text-rose-600 bg-rose-600/10 border-rose-600/30",
+};
+
+const COMMON_LOGGERS = ["SavedSplunker", "ExecProcessor", "SchedulerWindow", "SearchScheduler", "DispatchManager"];
+
+function LoggerPanel() {
+  const [loggerName, setLoggerName] = useState("SavedSplunker");
+  const [currentLevel, setCurrentLevel] = useState<LogLevel | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [setting, setSetting] = useState<LogLevel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const fetchLevel = useCallback(async (name = loggerName) => {
+    if (!name.trim()) return;
+    setLoading(true);
+    setError(null);
+    setCurrentLevel(null);
+    try {
+      const res = await api.proxy(`server/logger/${encodeURIComponent(name.trim())}`);
+      if (res.status === "error") throw new Error(res.message || "Logger not found");
+      const level = res.data?.entry?.[0]?.content?.level as LogLevel | undefined;
+      setCurrentLevel(level ?? null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [loggerName]);
+
+  const setLevel = async (level: LogLevel) => {
+    setSetting(level);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await api.proxy(
+        `server/logger/${encodeURIComponent(loggerName.trim())}`,
+        "POST",
+        `level=${level}`
+      );
+      if (res.status === "error") throw new Error(res.message || "Failed to set log level");
+      setCurrentLevel(level);
+      setSuccessMsg(`${loggerName} log level set to ${level}`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSetting(null);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-border">
+        <Bug size={14} className="text-violet-400 shrink-0" />
+        <h3 className="text-xs font-semibold text-white">Logger Control</h3>
+        <span className="text-[10px] text-gray-500">via /services/server/logger/{"{name}"}</span>
+      </div>
+
+      <div className="px-4 py-3 flex flex-wrap items-center gap-3">
+        {/* Logger name input */}
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] text-gray-500 shrink-0">Logger</label>
+          <input
+            value={loggerName}
+            onChange={(e) => setLoggerName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && fetchLevel()}
+            list="common-loggers"
+            className="w-44 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
+            placeholder="SavedSplunker"
+          />
+          <datalist id="common-loggers">
+            {COMMON_LOGGERS.map((l) => <option key={l} value={l} />)}
+          </datalist>
+          <button
+            onClick={() => fetchLevel()}
+            disabled={loading || !loggerName.trim()}
+            className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            Fetch
+          </button>
+        </div>
+
+        {/* Current level badge */}
+        {currentLevel && (
+          <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-mono font-semibold ${LEVEL_COLORS[currentLevel]}`}>
+            Current: {currentLevel}
+          </span>
+        )}
+
+        {/* Common loggers quick-pick */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="text-[9px] text-gray-600 uppercase tracking-wide">Quick</span>
+          {COMMON_LOGGERS.map((l) => (
+            <button
+              key={l}
+              onClick={() => { setLoggerName(l); fetchLevel(l); }}
+              className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${loggerName === l ? "border-brand-500/50 text-brand-400 bg-brand-500/10" : "border-surface-border text-gray-500 hover:text-gray-300 hover:bg-surface-hover"}`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Set level buttons — only shown after a successful fetch */}
+      {currentLevel && (
+        <div className="px-4 pb-3 flex items-center gap-2">
+          <span className="text-[10px] text-gray-500 shrink-0">Set level</span>
+          {LOG_LEVELS.map((level) => (
+            <button
+              key={level}
+              onClick={() => setLevel(level)}
+              disabled={!!setting || level === currentLevel}
+              className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-mono font-medium transition-colors disabled:opacity-40 ${
+                level === currentLevel
+                  ? LEVEL_COLORS[level] + " cursor-default"
+                  : "border-surface-border text-gray-400 hover:bg-surface-hover hover:text-gray-200"
+              }`}
+            >
+              {setting === level && <Loader2 size={10} className="animate-spin" />}
+              {setting !== level && level === currentLevel && <Check size={10} />}
+              {level}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && <div className="px-4 pb-3"><ErrorAlert message={error} /></div>}
+      {successMsg && (
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+            <CheckCircle size={12} />
+            {successMsg}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ScheduledSearchesPage() {
@@ -385,6 +535,7 @@ export function ScheduledSearchesPage() {
     <div className="flex-1 flex flex-col">
       <TopBar title="Scheduled Searches Audit" />
       <div className="p-6">
+        <LoggerPanel />
         {/* Summary */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 rounded-xl border border-surface-border bg-surface-raised p-4">
