@@ -189,10 +189,21 @@ function escapeHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function generatePDFReport(rows: any[]) {
+/** Extract stack name from a SplunkCloud FQDN: sh-i-xxx.STACK.env.splunkcloud.com → STACK */
+function extractStackName(fqdn: string): string {
+  if (!fqdn) return "";
+  const parts = fqdn.split(".");
+  // SplunkCloud pattern: <node>.<stack>.<env>.splunkcloud.com
+  if (parts.length >= 4 && fqdn.toLowerCase().includes("splunkcloud")) return parts[1];
+  // Fallback: return the hostname as-is
+  return fqdn;
+}
+
+function generatePDFReport(rows: any[], serverName = "") {
   const inefficient = rows.filter((r) => (r._efficiency?.ratio ?? 0) > 1.0);
   if (!inefficient.length) return;
 
+  const stackName = extractStackName(serverName);
   const date = new Date().toLocaleString();
 
   const tableRows = inefficient.map((r) => {
@@ -238,8 +249,10 @@ function generatePDFReport(rows: any[]) {
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; }
-    h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
-    .meta { color: #64748b; font-size: 11px; margin-bottom: 20px; }
+    h1 { font-size: 18px; font-weight: 700; margin: 0 0 2px; }
+    .stack-name { font-size: 15px; font-weight: 600; color: #0ea5e9; margin: 0 0 3px; letter-spacing: -0.01em; }
+    .meta { color: #64748b; font-size: 10px; margin-bottom: 18px; }
+    .server { font-family: monospace; font-size: 9.5px; color: #94a3b8; }
     .summary { display: flex; gap: 20px; margin-bottom: 20px; }
     .stat { background: #f1f5f9; border-radius: 8px; padding: 10px 16px; }
     .stat-val { font-size: 22px; font-weight: 700; }
@@ -263,7 +276,11 @@ function generatePDFReport(rows: any[]) {
 </head>
 <body>
   <h1>Inefficient Scheduled Searches</h1>
-  <div class="meta">Generated ${date} &nbsp;·&nbsp; searches with Duration / Freq &gt; 1.0x only</div>
+  ${stackName ? `<div class="stack-name">${escapeHtml(stackName)}</div>` : ""}
+  <div class="meta">
+    ${serverName ? `<span class="server">${escapeHtml(serverName)}</span> &nbsp;·&nbsp; ` : ""}
+    Generated ${date} &nbsp;·&nbsp; searches with Duration / Freq &gt; 1.0x only
+  </div>
   <div class="summary">
     <div class="stat"><div class="stat-val">${inefficient.length}</div><div class="stat-lbl">Inefficient searches</div></div>
     <div class="stat"><div class="stat-val" style="color:#dc2626">${inefficient.filter((r) => r._efficiency.status === "critical").length}</div><div class="stat-lbl">Critical (&gt;2x)</div></div>
@@ -511,6 +528,7 @@ export function ScheduledSearchesPage() {
   const [saveMsg, setSaveMsg] = useState<{ type: string; text: string } | null>(null);
   const [runTimes, setRunTimes] = useState<Record<string, number>>({});
   const [runTimesLoading, setRunTimesLoading] = useState(false);
+  const [splunkServerName, setSplunkServerName] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [groupBy, setGroupBy] = useState<string>("");
@@ -585,6 +603,19 @@ export function ScheduledSearchesPage() {
   }
 
   useEffect(() => { fetchScheduled(); }, [spl, showDisabled]);
+
+  useEffect(() => {
+    api.proxy("server/info")
+      .then((res) => {
+        if (res.status === "ok") {
+          const name = res.data?.entry?.[0]?.content?.serverName
+            || res.data?.entry?.[0]?.content?.host
+            || "";
+          setSplunkServerName(name);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   function toggleDisabled() {
     setShowDisabled((prev) => !prev);
@@ -864,7 +895,7 @@ export function ScheduledSearchesPage() {
           </button>
           {showEfficiency && inefficientCount > 0 && (
             <button
-              onClick={() => generatePDFReport(rowsWithEfficiency)}
+              onClick={() => generatePDFReport(rowsWithEfficiency, splunkServerName)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
             >
               <FileDown size={12} />
