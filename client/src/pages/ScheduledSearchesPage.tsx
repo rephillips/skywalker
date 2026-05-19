@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
@@ -12,7 +12,8 @@ const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" se
 
 /** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into offset seconds from now */
 function parseRelativeTimeOffsetSeconds(timeStr: string): number | null {
-  if (!timeStr || timeStr === "now") return 0;
+  if (!timeStr) return null;
+  if (timeStr === "now") return 0;
   // Strip snap-to modifiers like @h, @d
   const clean = timeStr.replace(/@[a-z]+$/i, "");
   const m = clean.match(/^-(\d+)(s|m|h|d|w|mon)$/);
@@ -42,39 +43,20 @@ function parseCronIntervalSeconds(cron: string): number | null {
   if (!cron) return null;
   const parts = cron.trim().split(/\s+/);
   if (parts.length < 5) return null;
-  const [minute, hour, dom, month, dow] = parts;
+  const [minute, hour, dom, , dow] = parts;
 
-  // */N minute = every N minutes
-  if (minute.startsWith("*/")) {
-    return parseInt(minute.slice(2)) * 60;
-  }
-  // Specific minute, check hour
-  if (hour === "*" && minute !== "*") {
-    // Runs every hour at specific minute
-    return 3600;
-  }
-  if (minute === "*" && hour === "*") {
-    // Every minute
-    return 60;
-  }
-  if (minute === "*") {
-    // Every minute of specific hour — treat as hourly
-    return 3600;
-  }
-  // Specific hour and minute
-  if (hour !== "*" && dom === "*" && month === "*") {
-    // Daily
-    return 86400;
-  }
-  // Specific day of week
-  if (dow !== "*" && dom === "*") {
-    return 604800; // Weekly
-  }
-  // Specific day of month
-  if (dom !== "*") {
-    return 2592000; // ~Monthly
-  }
-  // Default: assume daily
+  // Every minute: * * * * *
+  if (minute === "*" && hour === "*") return 60;
+  // Every N minutes: */N * * * *
+  if (minute.startsWith("*/")) return parseInt(minute.slice(2)) * 60;
+  // Specific day of month → monthly
+  if (dom !== "*" && dom !== "?") return 2592000;
+  // Specific day of week → weekly (must check before daily)
+  if (dow !== "*" && dow !== "?") return 604800;
+  // Specific hour, runs once per day
+  if (hour !== "*") return 86400;
+  // Specific minute, every hour
+  if (minute !== "*") return 3600;
   return 86400;
 }
 
@@ -87,13 +69,13 @@ interface Efficiency {
   source: "run_time" | "time_window" | "none";
 }
 
-/** Analyze efficiency using run_time (preferred) or time window (earliest-latest) as fallback */
+/** Analyze efficiency using time window (earliest→latest) as primary, run_time as fallback */
 function analyzeEfficiency(runTimeSec: number | null, timeWindowSec: number | null, cron: string): Efficiency {
   const ci = parseCronIntervalSeconds(cron);
 
-  // Prefer actual run duration, fall back to time window
-  const val = runTimeSec ?? timeWindowSec;
-  const source = runTimeSec !== null ? "run_time" as const : timeWindowSec !== null ? "time_window" as const : "none" as const;
+  // Prefer time window (data range scanned) over actual run duration
+  const val = timeWindowSec ?? runTimeSec;
+  const source = timeWindowSec !== null ? "time_window" as const : runTimeSec !== null ? "run_time" as const : "none" as const;
 
   if (val === null || ci === null) {
     return { valueSec: val, cronIntervalSec: ci, ratio: null, status: "unknown", message: val === null ? "No data" : "Cannot parse cron", source };
@@ -197,174 +179,181 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   FATAL: "text-rose-600 bg-rose-600/10 border-rose-600/30",
 };
 
-const COMMON_LOGGERS = ["SavedSplunker", "ExecProcessor", "SchedulerWindow", "SearchScheduler", "DispatchManager"];
+const OTHER_LOGGERS = ["ExecProcessor", "SchedulerWindow", "SearchScheduler", "DispatchManager"];
+const LOGGER_DEFAULTS: Record<string, LogLevel> = {
+  SavedSplunker: "INFO",
+  ExecProcessor: "INFO",
+  SchedulerWindow: "INFO",
+  SearchScheduler: "INFO",
+  DispatchManager: "INFO",
+};
 
 function LoggerPanel() {
-  const [loggerName, setLoggerName] = useState("SavedSplunker");
-  const [currentLevel, setCurrentLevel] = useState<LogLevel | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [setting, setSetting] = useState<LogLevel | null>(null);
+  const [ssLevel, setSsLevel] = useState<LogLevel | null>(null);
+  const [ssLoading, setSsLoading] = useState(false);
+  const [otherLevels, setOtherLevels] = useState<Record<string, LogLevel | null>>({});
+  const [otherLoading, setOtherLoading] = useState<Record<string, boolean>>({});
+  const [setting, setSetting] = useState<string | null>(null); // "Name:LEVEL"
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const fetchLevel = useCallback(async (name = loggerName) => {
-    if (!name.trim()) return;
-    setLoading(true);
-    setError(null);
-    setCurrentLevel(null);
+  useEffect(() => { fetchLevel("SavedSplunker"); }, []);
+
+  async function fetchLevel(name: string) {
+    const isSS = name === "SavedSplunker";
+    if (isSS) setSsLoading(true);
+    else setOtherLoading((p) => ({ ...p, [name]: true }));
     try {
-      const res = await api.proxy(`server/logger/${encodeURIComponent(name.trim())}`);
+      const res = await api.proxy(`server/logger/${encodeURIComponent(name)}`);
       if (res.status === "error") throw new Error(res.message || "Logger not found");
-      setCurrentLevel((res.data?.entry?.[0]?.content?.level as LogLevel) ?? null);
+      const level = (res.data?.entry?.[0]?.content?.level as LogLevel) ?? null;
+      if (isSS) setSsLevel(level);
+      else setOtherLevels((p) => ({ ...p, [name]: level }));
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (isSS) setSsLoading(false);
+      else setOtherLoading((p) => ({ ...p, [name]: false }));
     }
-  }, [loggerName]);
+  }
 
-  // Auto-fetch SavedSplunker on mount
-  useEffect(() => { fetchLevel("SavedSplunker"); }, []);
-
-  const setLevel = async (name: string, level: LogLevel) => {
-    setSetting(level);
+  async function setLevel(name: string, level: LogLevel) {
+    const key = `${name}:${level}`;
+    setSetting(key);
     setError(null);
     setSuccessMsg(null);
     try {
-      const res = await api.proxy(`server/logger/${encodeURIComponent(name.trim())}`, "POST", `level=${level}`);
+      const res = await api.proxy(`server/logger/${encodeURIComponent(name)}`, "POST", `level=${level}`);
       if (res.status === "error") throw new Error(res.message || "Failed to set log level");
-      setCurrentLevel(level);
-      setSuccessMsg(`${name} set to ${level}`);
-      setTimeout(() => setSuccessMsg(null), 5000);
+      if (name === "SavedSplunker") setSsLevel(level);
+      else setOtherLevels((p) => ({ ...p, [name]: level }));
+      setSuccessMsg(`${name} → ${level}`);
+      setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSetting(null);
     }
-  };
+  }
 
-  const isDebug = currentLevel === "DEBUG";
+  const ssIsDebug = ssLevel === "DEBUG";
 
   return (
     <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-border">
         <Bug size={14} className="text-violet-400 shrink-0" />
         <h3 className="text-xs font-semibold text-white">Scheduler Logger Control</h3>
-        <span className="text-[10px] text-gray-500">POST /services/server/logger/{"{name}"} — resets on Splunk restart</span>
+        <span className="text-[10px] text-gray-500">resets on Splunk restart · check scheduler.log</span>
       </div>
 
-      <div className="flex items-stretch divide-x divide-surface-border">
-        {/* SavedSplunker quick toggle — left panel */}
-        <div className="flex flex-col justify-between gap-3 px-5 py-4 min-w-[260px]">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-white font-mono">SavedSplunker</span>
-              <span className="text-[9px] text-gray-500">scheduler component</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-500">Current level</span>
-              {loading && <Loader2 size={11} className="animate-spin text-gray-500" />}
-              {!loading && currentLevel && (
-                <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-mono font-bold ${LEVEL_COLORS[currentLevel]}`}>
-                  {currentLevel}
-                </span>
-              )}
-              {!loading && !currentLevel && !error && (
-                <span className="text-[10px] text-gray-600">—</span>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setLevel("SavedSplunker", "DEBUG")}
-              disabled={!!setting || isDebug}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-40 ${
-                isDebug
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 cursor-default"
-                  : "border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
-              }`}
-            >
-              {setting === "DEBUG" ? <Loader2 size={11} className="animate-spin" /> : isDebug ? <Check size={11} /> : <Bug size={11} />}
-              Enable DEBUG
-            </button>
-            <button
-              onClick={() => setLevel("SavedSplunker", "INFO")}
-              disabled={!!setting || currentLevel === "INFO"}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors disabled:opacity-40 ${
-                currentLevel === "INFO"
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-default"
-                  : "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
-              }`}
-            >
-              {setting === "INFO" ? <Loader2 size={11} className="animate-spin" /> : currentLevel === "INFO" ? <Check size={11} /> : <RefreshCw size={11} />}
-              Reset to INFO
-            </button>
-          </div>
-        </div>
-
-        {/* General lookup — right panel */}
-        <div className="flex-1 px-5 py-4">
-          <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-2">Any logger</div>
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <input
-              value={loggerName}
-              onChange={(e) => setLoggerName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && fetchLevel()}
-              list="common-loggers"
-              className="w-44 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500"
-              placeholder="SavedSplunker"
-            />
-            <datalist id="common-loggers">
-              {COMMON_LOGGERS.map((l) => <option key={l} value={l} />)}
-            </datalist>
-            <button
-              onClick={() => fetchLevel()}
-              disabled={loading || !loggerName.trim()}
-              className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-40"
-            >
-              {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-              Fetch
-            </button>
-            {currentLevel && loggerName !== "SavedSplunker" && (
-              <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-mono font-bold ${LEVEL_COLORS[currentLevel]}`}>
-                {currentLevel}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <span className="text-[9px] text-gray-600 mr-1 self-center">Quick</span>
-            {COMMON_LOGGERS.map((l) => (
-              <button
-                key={l}
-                onClick={() => { setLoggerName(l); fetchLevel(l); }}
-                className={`text-[10px] rounded px-2 py-0.5 border transition-colors ${
-                  loggerName === l ? "border-brand-500/50 text-brand-400 bg-brand-500/10" : "border-surface-border text-gray-500 hover:text-gray-300 hover:bg-surface-hover"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-          {/* Set level buttons for arbitrary logger */}
-          {currentLevel && loggerName !== "SavedSplunker" && (
-            <div className="flex items-center gap-1.5 mt-3">
-              <span className="text-[10px] text-gray-500 shrink-0">Set</span>
-              {LOG_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  onClick={() => setLevel(loggerName, level)}
-                  disabled={!!setting || level === currentLevel}
-                  className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:opacity-40 ${
-                    level === currentLevel ? LEVEL_COLORS[level] + " cursor-default" : "border-surface-border text-gray-400 hover:bg-surface-hover hover:text-gray-200"
-                  }`}
-                >
-                  {setting === level && <Loader2 size={9} className="animate-spin" />}
-                  {level}
-                </button>
-              ))}
-            </div>
+      {/* SavedSplunker primary */}
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-surface-border">
+        <div className="flex items-center gap-2 min-w-[200px]">
+          <span className="text-xs font-semibold text-white font-mono">SavedSplunker</span>
+          {ssLoading && <Loader2 size={11} className="animate-spin text-gray-500" />}
+          {!ssLoading && ssLevel && (
+            <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-mono font-bold ${LEVEL_COLORS[ssLevel]}`}>
+              {ssLevel}
+            </span>
           )}
+          {!ssLoading && !ssLevel && !error && <span className="text-[10px] text-gray-600">—</span>}
         </div>
+        <button
+          onClick={() => setLevel("SavedSplunker", "DEBUG")}
+          disabled={!!setting || ssIsDebug}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
+            ssIsDebug ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 cursor-default" : "border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
+          }`}
+        >
+          {setting === "SavedSplunker:DEBUG" ? <Loader2 size={11} className="animate-spin" /> : ssIsDebug ? <Check size={11} /> : <Bug size={11} />}
+          Enable DEBUG
+        </button>
+        <button
+          onClick={() => setLevel("SavedSplunker", "INFO")}
+          disabled={!!setting || ssLevel === "INFO"}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 ${
+            ssLevel === "INFO" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 cursor-default" : "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+          }`}
+        >
+          {setting === "SavedSplunker:INFO" ? <Loader2 size={11} className="animate-spin" /> : ssLevel === "INFO" ? <Check size={11} /> : <RefreshCw size={11} />}
+          Reset to INFO
+        </button>
+      </div>
+
+      {/* Other components */}
+      <div className="px-5 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[9px] uppercase tracking-wide text-gray-500">Other Components</span>
+          <button
+            onClick={() => OTHER_LOGGERS.forEach(fetchLevel)}
+            className="flex items-center gap-1 text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
+          >
+            <RefreshCw size={10} /> Fetch All
+          </button>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr>
+              <th className="text-left text-[9px] text-gray-600 font-medium pb-1.5 w-40">Component</th>
+              <th className="text-left text-[9px] text-gray-600 font-medium pb-1.5 w-20">Default</th>
+              <th className="text-left text-[9px] text-gray-600 font-medium pb-1.5 w-24">Current</th>
+              <th className="text-right text-[9px] text-gray-600 font-medium pb-1.5">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-surface-border/30">
+            {OTHER_LOGGERS.map((name) => {
+              const level = otherLevels[name] ?? null;
+              const isLoadingRow = otherLoading[name];
+              const defaultLevel = LOGGER_DEFAULTS[name] as LogLevel;
+              const isDebug = level === "DEBUG";
+              return (
+                <tr key={name}>
+                  <td className="py-1.5 pr-3">
+                    <span className="text-[11px] font-mono text-gray-300">{name}</span>
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    <span className={`text-[10px] font-mono ${LEVEL_COLORS[defaultLevel].split(" ")[0]}`}>{defaultLevel}</span>
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    {isLoadingRow ? (
+                      <Loader2 size={11} className="animate-spin text-gray-500" />
+                    ) : level ? (
+                      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-mono font-bold ${LEVEL_COLORS[level]}`}>
+                        {level}
+                      </span>
+                    ) : (
+                      <button onClick={() => fetchLevel(name)} className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors underline underline-offset-2">
+                        fetch
+                      </button>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setLevel(name, "DEBUG")}
+                        disabled={!!setting || isDebug}
+                        className={`flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border transition-colors disabled:opacity-40 ${
+                          isDebug ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-400 cursor-default" : "border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10"
+                        }`}
+                      >
+                        {setting === `${name}:DEBUG` ? <Loader2 size={9} className="animate-spin" /> : <Bug size={9} />}
+                        DEBUG
+                      </button>
+                      <button
+                        onClick={() => setLevel(name, defaultLevel)}
+                        disabled={!!setting || level === defaultLevel}
+                        className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium border border-surface-border text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-40"
+                      >
+                        {setting === `${name}:${defaultLevel}` ? <Loader2 size={9} className="animate-spin" /> : <RefreshCw size={9} />}
+                        {defaultLevel}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {(error || successMsg) && (
@@ -671,7 +660,7 @@ export function ScheduledSearchesPage() {
             )}
           >
             <Zap size={12} />
-            {showEfficiency ? "Efficiency On" : "Find Inefficiency"}
+            Find Inefficiency
           </button>
           <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
             <input
@@ -890,7 +879,7 @@ export function ScheduledSearchesPage() {
                                 </label>
                                 {/* Preview new efficiency */}
                                 {(() => {
-                                  const preview = analyzeEfficiency(fixEarliest, fixCron);
+                                  const preview = analyzeEfficiency(null, computeTimeWindowSeconds(fixEarliest, fixLatest || "now"), fixCron);
                                   return (
                                     <span className={clsx("text-[10px] font-mono", {
                                       "text-emerald-400": preview.status === "ok",
