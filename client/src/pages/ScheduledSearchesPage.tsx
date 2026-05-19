@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug } from "lucide-react";
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -406,6 +406,10 @@ export function ScheduledSearchesPage() {
   const [saveMsg, setSaveMsg] = useState<{ type: string; text: string } | null>(null);
   const [runTimes, setRunTimes] = useState<Record<string, number>>({});
   const [runTimesLoading, setRunTimesLoading] = useState(false);
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [groupBy, setGroupBy] = useState<string>("");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   async function fetchRunTimes() {
     setRunTimesLoading(true);
@@ -560,10 +564,66 @@ export function ScheduledSearchesPage() {
     return Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(lowerFilter));
   });
 
-  // Sort inefficient to top when efficiency mode is on
-  const sorted = showEfficiency
-    ? [...filtered].sort((a, b) => (b._efficiency.ratio ?? 0) - (a._efficiency.ratio ?? 0))
-    : filtered;
+  function handleSort(key: string) {
+    if (sortCol === key) {
+      if (sortDir === "asc") { setSortDir("desc"); }
+      else { setSortCol(null); setSortDir("asc"); }
+    } else {
+      setSortCol(key);
+      setSortDir("asc");
+    }
+    setExpandedRow(null);
+    setFixingRow(null);
+  }
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  // Apply efficiency sort first, then column sort on top
+  const sorted = useMemo(() => {
+    let base = showEfficiency && !sortCol
+      ? [...filtered].sort((a, b) => (b._efficiency.ratio ?? 0) - (a._efficiency.ratio ?? 0))
+      : [...filtered];
+    if (sortCol) {
+      base.sort((a, b) => {
+        const av = String((a as any)[sortCol] ?? "").toLowerCase();
+        const bv = String((b as any)[sortCol] ?? "").toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+    }
+    return base;
+  }, [filtered, showEfficiency, sortCol, sortDir]);
+
+  type EnrichedRow = (typeof rowsWithEfficiency)[0];
+  type DisplayItem =
+    | { kind: "group"; groupKey: string; count: number }
+    | { kind: "row"; row: EnrichedRow; rowIdx: number; groupKey: string };
+
+  const displayItems = useMemo((): DisplayItem[] => {
+    if (!groupBy) {
+      return sorted.map((row, rowIdx) => ({ kind: "row", row, rowIdx, groupKey: "" }));
+    }
+    const groups = new Map<string, EnrichedRow[]>();
+    for (const row of sorted) {
+      const key = String((row as any)[groupBy] || "(none)");
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
+    }
+    const items: DisplayItem[] = [];
+    let rowIdx = 0;
+    for (const [groupKey, rows] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      items.push({ kind: "group", groupKey, count: rows.length });
+      for (const row of rows) {
+        items.push({ kind: "row", row, rowIdx: rowIdx++, groupKey });
+      }
+    }
+    return items;
+  }, [sorted, groupBy]);
 
   const inefficientCount = rowsWithEfficiency.filter((r) => r._efficiency.status === "warning" || r._efficiency.status === "critical").length;
   const criticalCount = rowsWithEfficiency.filter((r) => r._efficiency.status === "critical").length;
@@ -669,6 +729,22 @@ export function ScheduledSearchesPage() {
             className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-100 outline-none focus:border-brand-500"
             placeholder="Filter results..."
           />
+          <div className="flex items-center gap-1">
+            <Layers size={11} className="text-gray-500" />
+            <span className="text-[10px] text-gray-500">Group:</span>
+            {[{ key: "", label: "None" }, { key: "eai:acl.app", label: "App" }, { key: "eai:acl.owner", label: "User" }].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setGroupBy(key); setCollapsedGroups(new Set()); }}
+                className={clsx("rounded px-2 py-1 text-[10px] border transition-colors", groupBy === key
+                  ? "border-brand-500/50 bg-brand-500/10 text-brand-400"
+                  : "border-surface-border text-gray-500 hover:text-gray-300 hover:bg-surface-hover"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => { const next = !showEfficiency; setShowEfficiency(next); if (next) fetchRunTimes(); }}
             className={clsx(
@@ -717,14 +793,45 @@ export function ScheduledSearchesPage() {
                       </th>
                     )}
                     {columns.map((col) => (
-                      <th key={col.key} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">
-                        {col.label}
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap cursor-pointer hover:text-gray-300 select-none"
+                      >
+                        <div className="flex items-center gap-1">
+                          {col.label}
+                          {sortCol === col.key
+                            ? sortDir === "asc" ? <ChevronUp size={10} className="text-brand-400" /> : <ChevronDown size={10} className="text-brand-400" />
+                            : <ChevronsUpDown size={10} className="opacity-25" />}
+                        </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((row, i) => {
+                  {displayItems.map((item) => {
+                    if (item.kind === "group") {
+                      const isCollapsed = collapsedGroups.has(item.groupKey);
+                      const totalCols = columns.length + (showEfficiency ? 1 : 0);
+                      return (
+                        <tr key={`group-${item.groupKey}`} className="bg-surface/60 border-b border-surface-border">
+                          <td colSpan={totalCols} className="px-3 py-1.5">
+                            <button
+                              onClick={() => toggleGroup(item.groupKey)}
+                              className="flex items-center gap-2 text-[11px] font-semibold text-gray-300 hover:text-white transition-colors"
+                            >
+                              {isCollapsed ? <ChevronRight size={12} className="text-gray-500" /> : <ChevronDown size={12} className="text-gray-500" />}
+                              <span>{item.groupKey}</span>
+                              <span className="rounded-full bg-surface border border-surface-border px-1.5 py-0.5 text-[9px] text-gray-500 font-normal">{item.count}</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    const { row, rowIdx: i, groupKey } = item;
+                    if (groupBy && collapsedGroups.has(groupKey)) return null;
+
                     const eff = row._efficiency;
                     const rowHighlight = showEfficiency && eff.status === "critical"
                       ? "bg-red-500/5"
@@ -969,7 +1076,7 @@ export function ScheduledSearchesPage() {
           </div>
         )}
 
-        {sorted.length === 0 && !loading && (
+        {filtered.length === 0 && !loading && (
           <p className="text-xs text-gray-500 text-center py-8">
             {filter ? `No results match "${filter}"` : "No scheduled searches found"}
           </p>
