@@ -193,7 +193,7 @@ function extractStackName(fqdn: string): string {
   return fqdn;
 }
 
-function generatePDFReport(rows: any[], serverName = "") {
+function generatePDFReport(rows: any[], serverName = "", wlmBlocked = false) {
   // rows are already pre-filtered by the caller (honors excludeApps, filterApps, filterUsers)
   // only exclude rest-api/inputlookup searches which are never meaningful for this report
   const reportRows = rows.filter((r) => !r._isNoIndex);
@@ -206,10 +206,11 @@ function generatePDFReport(rows: any[], serverName = "") {
     const eff = r._efficiency;
     const tags = [
       r._isAllTime ? "all-time" : null,
+      r._isAllTime && wlmBlocked ? "wlm-blocked" : null,
     ].filter(Boolean);
 
     const durationCell = r._isAllTime
-      ? `<span style="color:#dc2626;font-weight:700">All-Time Search</span>`
+      ? `<span style="color:#dc2626;font-weight:700">All-Time Search</span>${wlmBlocked ? `<br><span class="wlm-badge">Blocked by WLM Admission Rule</span>` : ""}`
       : `<span style="color:#ea580c;font-weight:700;font-family:monospace">${eff.ratio !== null ? eff.ratio.toFixed(1) + "x" : "?"}</span>
          <br><small style="color:#64748b;font-weight:400">${
            eff.valueSec !== null && eff.cronIntervalSec !== null
@@ -263,6 +264,8 @@ function generatePDFReport(rows: any[], serverName = "") {
     .tag { display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 3px; font-size: 8.5px; font-weight: 600; vertical-align: middle; }
     .tag-alltime { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
     .tag-noindex { background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+    .tag-wlm-blocked { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+    .wlm-badge { display: inline-block; margin-top: 3px; padding: 1px 6px; border-radius: 3px; font-size: 8.5px; font-weight: 600; background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
     @media print {
       @page { size: A4 landscape; margin: 12mm 15mm; }
       body { padding: 0; }
@@ -280,6 +283,7 @@ function generatePDFReport(rows: any[], serverName = "") {
     <div class="stat"><div class="stat-val">${reportRows.length}</div><div class="stat-lbl">Inefficient searches</div></div>
     <div class="stat"><div class="stat-val" style="color:#ea580c">${reportRows.filter((r) => !r._isAllTime && (r._efficiency?.ratio ?? 0) > 1.0).length}</div><div class="stat-lbl">Ratio &gt; 1x</div></div>
     <div class="stat"><div class="stat-val" style="color:#dc2626">${reportRows.filter((r) => r._isAllTime).length}</div><div class="stat-lbl">All-Time scans</div></div>
+    ${wlmBlocked ? `<div class="stat"><div class="stat-val" style="color:#6d28d9">${reportRows.filter((r) => r._isAllTime).length}</div><div class="stat-lbl">Blocked by WLM Admission Rule</div></div>` : ""}
   </div>
   <table>
     <thead>
@@ -301,7 +305,7 @@ function generatePDFReport(rows: any[], serverName = "") {
   }
 }
 
-function exportCSV(rows: any[], serverName = "") {
+function exportCSV(rows: any[], serverName = "", wlmBlocked = false) {
   const exportRows = rows.filter((r) => !r._isNoIndex);
   if (!exportRows.length) return;
 
@@ -327,7 +331,7 @@ function exportCSV(rows: any[], serverName = "") {
     ...exportRows.map((r) => {
       const eff = r._efficiency;
       const duration = r._isAllTime
-        ? "All-Time Search"
+        ? wlmBlocked ? "All-Time Search — Blocked by WLM Admission Rule" : "All-Time Search"
         : eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?";
       return [
         r["title"] || "",
@@ -1088,14 +1092,14 @@ export function ScheduledSearchesPage() {
           {showEfficiency && inefficientCount > 0 && (
             <>
               <button
-                onClick={() => generatePDFReport(filtered, splunkServerName)}
+                onClick={() => generatePDFReport(filtered, splunkServerName, !!wlmAllTimeRule)}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
               >
                 <FileDown size={12} />
                 PDF
               </button>
               <button
-                onClick={() => exportCSV(filtered, splunkServerName)}
+                onClick={() => exportCSV(filtered, splunkServerName, !!wlmAllTimeRule)}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
               >
                 <FileDown size={12} />
@@ -1188,7 +1192,10 @@ A search scheduled to run every 5 minutes (cron: */5 * * * *) should be configur
 If that same search is currently set to Earliest: -1h / Latest: now, it is scanning 60 minutes of data on every 5-minute run — a 12x overlap — which is unnecessary and puts undue load on the platform.
 
 We have included both a PDF report and CSV export identifying all scheduled searches flagged as inefficient based on their Frequency (Cron Schedule) and Duration (span between Earliest and Latest time). Please review the attached files and update the search configurations accordingly.
+${wlmAllTimeRule ? `
+Note Regarding All-Time Searches
 
+We have also identified that a Workload Management (WLM) Admission Rule is currently active on your Search Heads that targets all-time searches (predicate: ${wlmAllTimeRule}). All-time searches identified in the attached report are being blocked or throttled by this rule. While this rule helps protect your environment from unbounded searches, we still recommend updating the time range of these searches to align with their cron interval as a permanent resolution.` : ""}
 If you have any questions or need assistance making these changes, please don't hesitate to reach out.
 
 Kindly,
