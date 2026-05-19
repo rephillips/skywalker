@@ -1156,8 +1156,10 @@ export function ScheduledSearchesPage() {
             </button>
 
             {showEmailCard && (() => {
-              const stackLabel = splunkServerName ? ` — ${splunkServerName.replace(/^https?:\/\//, "").split(".")[0]}` : "";
-              const subject = `Splunk Scheduled Search Efficiency Review${stackLabel}`;
+              const stackShort = splunkServerName ? splunkServerName.replace(/^https?:\/\//, "").split(".")[0] : "";
+              const subject = stackShort
+                ? `Splunk Scheduled Search Efficiency Review — Stack: ${stackShort}`
+                : `Splunk Scheduled Search Efficiency Review`;
               const body = `Hello,
 
 As part of our review of your Splunk Cloud environment, we have identified a number of scheduled searches that are operating inefficiently. Please find attached both a PDF report and CSV export of all searches identified.
@@ -1169,7 +1171,7 @@ A scheduled search is considered inefficient when its configured time window —
 Why does this matter?
 
 Inefficient searches can:
-  - Increase CPU and memory load on your Search Heads
+  - Increase CPU and memory load on your Search Heads and Indexers
   - Cause longer runtimes that delay other concurrent work
   - Lead to searches being skipped when concurrency limits are reached
   - Contribute to degraded search performance across the platform
