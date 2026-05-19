@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, RefreshCw, Layers, ToggleLeft, BookOpen, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
+import { Loader2, RefreshCw, Layers, ToggleLeft, BookOpen, ChevronDown, ChevronRight, ArrowRight, Filter } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -49,6 +49,18 @@ function WeightBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+const WLM_HOST_FILTER = `((host=sh-* AND host=*.splunk*.*) OR (host=idx-* AND host=*.splunk*.*))`; // matches Splunk Cloud SH/IDX hostnames
+const WLM_COUNT_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats dc(search_name) as filtered_count`;
+const WLM_DETAIL_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats count by host prefilter_action prefilter_rule search_name user app search_type`;
+
+const TIME_OPTIONS = [
+  { label: "Last 15 min", value: "-15m" },
+  { label: "Last 60 min", value: "-60m" },
+  { label: "Last 4 hours", value: "-4h" },
+  { label: "Last 24 hours", value: "-24h" },
+  { label: "Last 7 days", value: "-7d" },
+];
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function WorkloadPage() {
@@ -57,6 +69,16 @@ export function WorkloadPage() {
   const [error, setError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
+
+  // WLM live activity
+  const [wlmEarliest, setWlmEarliest] = useState("-60m");
+  const [wlmCount, setWlmCount] = useState<number | null>(null);
+  const [wlmCountLoading, setWlmCountLoading] = useState(false);
+  const [wlmCountError, setWlmCountError] = useState<string | null>(null);
+  const [showWlmDrilldown, setShowWlmDrilldown] = useState(false);
+  const [wlmDetails, setWlmDetails] = useState<any[]>([]);
+  const [wlmDetailsLoading, setWlmDetailsLoading] = useState(false);
+  const [wlmDetailsError, setWlmDetailsError] = useState<string | null>(null);
 
   async function fetchAll() {
     setLoading(true);
@@ -73,6 +95,34 @@ export function WorkloadPage() {
   }
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWlmCountLoading(true);
+    setWlmCountError(null);
+    api.search(WLM_COUNT_SPL, wlmEarliest, "now")
+      .then((res) => {
+        if (cancelled) return;
+        const row = res.results?.[0];
+        const n = parseInt((row as any)?.filtered_count ?? "0", 10);
+        setWlmCount(isNaN(n) ? 0 : n);
+      })
+      .catch((err) => { if (!cancelled) setWlmCountError((err as Error).message); })
+      .finally(() => { if (!cancelled) setWlmCountLoading(false); });
+    return () => { cancelled = true; };
+  }, [wlmEarliest]);
+
+  useEffect(() => {
+    if (!showWlmDrilldown) return;
+    let cancelled = false;
+    setWlmDetailsLoading(true);
+    setWlmDetailsError(null);
+    api.search(WLM_DETAIL_SPL, wlmEarliest, "now")
+      .then((res) => { if (!cancelled) setWlmDetails(res.results ?? []); })
+      .catch((err) => { if (!cancelled) setWlmDetailsError((err as Error).message); })
+      .finally(() => { if (!cancelled) setWlmDetailsLoading(false); });
+    return () => { cancelled = true; };
+  }, [showWlmDrilldown, wlmEarliest]);
 
   // ── Parse data from the status response ──────────────────────────────────
   const content = rawStatus?.data?.entry?.[0]?.content ?? null;
@@ -385,6 +435,119 @@ export function WorkloadPage() {
             )}
           </>
         )}
+        {/* ── WLM Live Activity ── */}
+        <section>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-orange-400 shrink-0" />
+              <h2 className="text-sm font-semibold text-white">Searches Filtered by WLM</h2>
+              <span className="text-[10px] text-gray-500">from <span className="font-mono text-gray-400">index=_internal sourcetype=wlm_*</span></span>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={wlmEarliest}
+                onChange={(e) => {
+                  setWlmEarliest(e.target.value);
+                  setShowWlmDrilldown(false);
+                }}
+                className="rounded-md border border-surface-border bg-surface px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
+              >
+                {TIME_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Stat card — clickable drilldown */}
+          <button
+            onClick={() => setShowWlmDrilldown((v) => !v)}
+            className={clsx(
+              "w-full rounded-xl border bg-surface-raised p-5 flex items-center gap-5 hover:bg-surface-hover transition-colors text-left",
+              showWlmDrilldown ? "border-orange-500/40" : "border-surface-border"
+            )}
+            disabled={wlmCountLoading}
+          >
+            <div className="flex flex-col items-center justify-center w-24 shrink-0">
+              {wlmCountLoading ? (
+                <Loader2 size={24} className="animate-spin text-orange-400" />
+              ) : wlmCountError ? (
+                <span className="text-xs text-red-400 text-center">Error</span>
+              ) : (
+                <span className="text-4xl font-bold tabular-nums" style={{ color: (wlmCount ?? 0) > 0 ? "#f97316" : "#6b7280" }}>
+                  {wlmCount ?? "—"}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-gray-200">Distinct searches filtered by WLM</span>
+              <span className="text-xs text-gray-500">
+                {TIME_OPTIONS.find((o) => o.value === wlmEarliest)?.label ?? wlmEarliest} · click to {showWlmDrilldown ? "collapse" : "expand"} detail
+              </span>
+              {wlmCountError && <span className="text-xs text-red-400 mt-1">{wlmCountError}</span>}
+            </div>
+            <div className="ml-auto shrink-0">
+              {showWlmDrilldown ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+            </div>
+          </button>
+
+          {/* Drilldown detail table */}
+          {showWlmDrilldown && (
+            <div className="mt-3 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+              {wlmDetailsLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 size={16} className="animate-spin text-brand-400" />
+                </div>
+              ) : wlmDetailsError ? (
+                <div className="p-5 text-xs text-red-400">{wlmDetailsError}</div>
+              ) : wlmDetails.length === 0 ? (
+                <div className="p-5 text-xs text-gray-500 text-center">No results — no searches were filtered by WLM in this time window.</div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-surface-border">
+                        {["Search Name", "App", "User", "Search Type", "Prefilter Rule", "Action", "Host", "Count"].map((h) => (
+                          <th key={h} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {wlmDetails.map((row, i) => (
+                        <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
+                          <td className="px-3 py-2 max-w-[220px]">
+                            <span className="text-xs font-mono text-gray-200 truncate block" title={(row as any).search_name}>{(row as any).search_name || "—"}</span>
+                          </td>
+                          <td className="px-3 py-2"><span className="text-xs text-gray-400">{(row as any).app || "—"}</span></td>
+                          <td className="px-3 py-2"><span className="text-xs text-gray-400">{(row as any).user || "—"}</span></td>
+                          <td className="px-3 py-2">
+                            <span className={clsx("rounded px-1.5 py-0.5 text-[10px] font-medium",
+                              (row as any).search_type === "scheduled" ? "bg-blue-500/15 text-blue-400 border border-blue-500/25"
+                              : "bg-gray-500/15 text-gray-400 border border-gray-500/25"
+                            )}>
+                              {(row as any).search_type || "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 max-w-[180px]">
+                            <span className="text-xs font-mono text-violet-400 truncate block" title={(row as any).prefilter_rule}>{(row as any).prefilter_rule || "—"}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-orange-500/15 text-orange-400 border border-orange-500/25">
+                              {(row as any).prefilter_action || "filter"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2"><span className="text-xs font-mono text-gray-500">{(row as any).host || "—"}</span></td>
+                          <td className="px-3 py-2 text-right"><span className="text-xs font-mono text-gray-300">{(row as any).count}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* ── Knowledge Card ── */}
         <section>
           <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
