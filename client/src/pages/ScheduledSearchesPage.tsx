@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers } from "lucide-react";
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers, FileDown } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -183,6 +183,111 @@ function formatSeconds(sec: number): string {
   if (sec < 3600) return `${Math.round(sec / 60)}m`;
   if (sec < 86400) return `${Math.round(sec / 3600)}h`;
   return `${Math.round(sec / 86400)}d`;
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function generatePDFReport(rows: any[]) {
+  const inefficient = rows.filter((r) => (r._efficiency?.ratio ?? 0) > 1.0);
+  if (!inefficient.length) return;
+
+  const date = new Date().toLocaleString();
+
+  const tableRows = inefficient.map((r) => {
+    const eff = r._efficiency;
+    const isCritical = eff.status === "critical";
+    const ratioColor = isCritical ? "#dc2626" : "#d97706";
+    const tags = [
+      r._isAllTime ? "all-time" : null,
+      r._isNoIndex ? "no index" : null,
+    ].filter(Boolean);
+
+    return `
+      <tr class="data-row">
+        <td>
+          <span class="name">${escapeHtml(r["title"] || "")}</span>
+          ${tags.map((t) => `<span class="tag ${t === "all-time" ? "tag-alltime" : "tag-noindex"}">${t}</span>`).join("")}
+        </td>
+        <td class="mono">${escapeHtml(r["cron_schedule"] || "—")}<br><small>${escapeHtml(cronToHuman(r["cron_schedule"] || ""))}</small></td>
+        <td class="mono">${escapeHtml(r["dispatch.earliest_time"] || "—")}</td>
+        <td class="mono">${escapeHtml(r["dispatch.latest_time"] || "—")}</td>
+        <td>${escapeHtml(r["eai:acl.app"] || "—")}</td>
+        <td>${escapeHtml(r["eai:acl.owner"] || "—")}</td>
+        <td>${escapeHtml(r["eai:acl.sharing"] || "—")}</td>
+        <td style="color:${ratioColor};font-weight:700;font-family:monospace;white-space:nowrap">
+          ${eff.ratio !== null ? eff.ratio.toFixed(1) + "x" : "?"}
+          <br><small style="color:#64748b;font-weight:400">${
+            eff.valueSec !== null && eff.cronIntervalSec !== null
+              ? `${formatSeconds(eff.valueSec)} window / ${formatSeconds(eff.cronIntervalSec)} interval`
+              : eff.message
+          }</small>
+        </td>
+      </tr>
+      <tr class="spl-row">
+        <td colspan="8"><code>${escapeHtml(r["search"] || "")}</code></td>
+      </tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Inefficient Scheduled Searches — ${date}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; }
+    h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+    .meta { color: #64748b; font-size: 11px; margin-bottom: 20px; }
+    .summary { display: flex; gap: 20px; margin-bottom: 20px; }
+    .stat { background: #f1f5f9; border-radius: 8px; padding: 10px 16px; }
+    .stat-val { font-size: 22px; font-weight: 700; }
+    .stat-lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #1e293b; color: #e2e8f0; padding: 7px 10px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+    .data-row td { padding: 8px 10px 4px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    .spl-row td { padding: 2px 10px 10px; border-bottom: 2px solid #e2e8f0; }
+    code { font-family: "SF Mono", "Fira Code", monospace; font-size: 9.5px; color: #334155; white-space: pre-wrap; word-break: break-all; background: #f8fafc; display: block; padding: 6px 8px; border-radius: 4px; border: 1px solid #e2e8f0; }
+    .name { font-weight: 600; color: #0f172a; }
+    .mono { font-family: monospace; font-size: 11px; }
+    small { color: #94a3b8; font-size: 9px; }
+    .tag { display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 3px; font-size: 8.5px; font-weight: 600; vertical-align: middle; }
+    .tag-alltime { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .tag-noindex { background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+    @media print {
+      @page { size: A4 landscape; margin: 12mm 15mm; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Inefficient Scheduled Searches</h1>
+  <div class="meta">Generated ${date} &nbsp;·&nbsp; searches with Duration / Freq &gt; 1.0x only</div>
+  <div class="summary">
+    <div class="stat"><div class="stat-val">${inefficient.length}</div><div class="stat-lbl">Inefficient searches</div></div>
+    <div class="stat"><div class="stat-val" style="color:#dc2626">${inefficient.filter((r) => r._efficiency.status === "critical").length}</div><div class="stat-lbl">Critical (&gt;2x)</div></div>
+    <div class="stat"><div class="stat-val" style="color:#d97706">${inefficient.filter((r) => r._efficiency.status === "warning").length}</div><div class="stat-lbl">Warning (1–2x)</div></div>
+    <div class="stat"><div class="stat-val" style="color:#c2410c">${inefficient.filter((r) => r._isAllTime).length}</div><div class="stat-lbl">All-time scans</div></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Search Name</th><th>Cron</th><th>Earliest</th><th>Latest</th>
+        <th>App</th><th>User</th><th>Sharing</th><th>Duration / Freq</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 400);
+  }
 }
 
 const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"] as const;
@@ -757,6 +862,15 @@ export function ScheduledSearchesPage() {
             <Zap size={12} />
             Find Inefficiency
           </button>
+          {showEfficiency && inefficientCount > 0 && (
+            <button
+              onClick={() => generatePDFReport(rowsWithEfficiency)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
+            >
+              <FileDown size={12} />
+              PDF Report
+            </button>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
             <input
               type="checkbox"
