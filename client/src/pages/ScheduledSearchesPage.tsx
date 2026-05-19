@@ -529,15 +529,19 @@ export function ScheduledSearchesPage() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [filterApps, setFilterApps] = useState<Set<string>>(new Set());
   const [filterUsers, setFilterUsers] = useState<Set<string>>(new Set());
+  const [excludeApps, setExcludeApps] = useState<Set<string>>(new Set(["data_manager"]));
   const [appDropdownOpen, setAppDropdownOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [excludeDropdownOpen, setExcludeDropdownOpen] = useState(false);
   const appDropdownRef = useRef<HTMLDivElement>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
+  const excludeDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (appDropdownRef.current && !appDropdownRef.current.contains(e.target as Node)) setAppDropdownOpen(false);
       if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) setUserDropdownOpen(false);
+      if (excludeDropdownRef.current && !excludeDropdownRef.current.contains(e.target as Node)) setExcludeDropdownOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -716,6 +720,7 @@ export function ScheduledSearchesPage() {
     if (!matchesText) return false;
     if (filterApps.size > 0 && !filterApps.has(r["eai:acl.app"] || "")) return false;
     if (filterUsers.size > 0 && !filterUsers.has(r["eai:acl.owner"] || "")) return false;
+    if (excludeApps.size > 0 && excludeApps.has(r["eai:acl.app"] || "")) return false;
     if (showEfficiency) {
       if (r._isNoIndex) return false;
       if (r._isAllTime) return true;
@@ -887,7 +892,7 @@ export function ScheduledSearchesPage() {
           {/* App filter */}
           <div className="relative" ref={appDropdownRef}>
             <button
-              onClick={() => { setAppDropdownOpen((o) => !o); setUserDropdownOpen(false); }}
+              onClick={() => { setAppDropdownOpen((o) => !o); setUserDropdownOpen(false); setExcludeDropdownOpen(false); }}
               className={clsx("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors", filterApps.size > 0 ? "border-brand-500/50 bg-brand-500/10 text-brand-400" : "border-surface-border text-gray-400 hover:text-gray-200")}
             >
               App {filterApps.size > 0 ? `(${filterApps.size})` : "▾"}
@@ -918,7 +923,7 @@ export function ScheduledSearchesPage() {
           {/* User filter */}
           <div className="relative" ref={userDropdownRef}>
             <button
-              onClick={() => { setUserDropdownOpen((o) => !o); setAppDropdownOpen(false); }}
+              onClick={() => { setUserDropdownOpen((o) => !o); setAppDropdownOpen(false); setExcludeDropdownOpen(false); }}
               className={clsx("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors", filterUsers.size > 0 ? "border-brand-500/50 bg-brand-500/10 text-brand-400" : "border-surface-border text-gray-400 hover:text-gray-200")}
             >
               User {filterUsers.size > 0 ? `(${filterUsers.size})` : "▾"}
@@ -940,6 +945,37 @@ export function ScheduledSearchesPage() {
                         {filterUsers.has(user) && <Check size={9} className="text-white" />}
                       </div>
                       <span className={filterUsers.has(user) ? "text-gray-100" : "text-gray-400"}>{user}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Exclude App */}
+          <div className="relative" ref={excludeDropdownRef}>
+            <button
+              onClick={() => { setExcludeDropdownOpen((o) => !o); setAppDropdownOpen(false); setUserDropdownOpen(false); }}
+              className={clsx("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors", excludeApps.size > 0 ? "border-rose-500/50 bg-rose-500/10 text-rose-400" : "border-surface-border text-gray-400 hover:text-gray-200")}
+            >
+              Exclude App {excludeApps.size > 0 ? `(${excludeApps.size})` : "▾"}
+            </button>
+            {excludeDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 z-20 w-56 rounded-xl border border-surface-border bg-surface-raised shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-surface-border">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Exclude Apps</span>
+                  {excludeApps.size > 0 && <button onClick={() => setExcludeApps(new Set())} className="text-[10px] text-rose-400 hover:text-rose-200">Clear all</button>}
+                </div>
+                <div className="max-h-56 overflow-y-auto py-1">
+                  {availableApps.map((app) => (
+                    <button
+                      key={app}
+                      onClick={() => setExcludeApps((prev) => { const next = new Set(prev); next.has(app) ? next.delete(app) : next.add(app); return next; })}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-surface-hover transition-colors"
+                    >
+                      <div className={clsx("w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0", excludeApps.has(app) ? "bg-rose-500 border-rose-500" : "border-gray-600")}>
+                        {excludeApps.has(app) && <X size={9} className="text-white" />}
+                      </div>
+                      <span className={excludeApps.has(app) ? "text-rose-300" : "text-gray-400"}>{app}</span>
                     </button>
                   ))}
                 </div>
