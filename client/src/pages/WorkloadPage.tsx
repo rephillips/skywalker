@@ -258,7 +258,7 @@ export function WorkloadPage() {
     <div className="flex-1 flex flex-col">
       <TopBar title="Workload Management" />
 
-      <div className="p-6 flex flex-col gap-6 max-w-6xl">
+      <div className="p-6 flex flex-col gap-6">
         {loading && (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={20} className="animate-spin text-brand-400" />
@@ -394,10 +394,10 @@ export function WorkloadPage() {
                       {admissionRules.map((rule) => (
                         <tr key={rule.name} className={clsx("border-b border-surface-border/50 hover:bg-surface-hover transition-colors", rule.disabled && "opacity-50")}>
                           <td className="px-3 py-2"><span className="text-xs font-mono text-gray-500">{rule.order}</span></td>
-                          <td className="px-3 py-2 max-w-[200px]">
+                          <td className="px-3 py-2">
                             <span className="text-xs font-mono text-gray-300 truncate block" title={rule.name}>{rule.name}</span>
                           </td>
-                          <td className="px-3 py-2 max-w-[320px]">
+                          <td className="px-3 py-2">
                             <span className="text-xs font-mono text-gray-400 truncate block" title={rule.predicate}>{rule.predicate || "—"}</span>
                           </td>
                           <td className="px-3 py-2">
@@ -448,10 +448,10 @@ export function WorkloadPage() {
                         return (
                           <tr key={rule.name} className={clsx("border-b border-surface-border/50 hover:bg-surface-hover transition-colors", rule.disabled && "opacity-50")}>
                             <td className="px-3 py-2"><span className="text-xs font-mono text-gray-500">{rule.order}</span></td>
-                            <td className="px-3 py-2 max-w-[200px]">
+                            <td className="px-3 py-2">
                               <span className="text-xs font-mono text-gray-300 truncate block" title={rule.name}>{rule.name}</span>
                             </td>
-                            <td className="px-3 py-2 max-w-[300px]">
+                            <td className="px-3 py-2">
                               <span className="text-xs font-mono text-gray-400 truncate block" title={rule.predicate}>{rule.predicate || "—"}</span>
                             </td>
                             <td className="px-3 py-2">
@@ -541,7 +541,7 @@ export function WorkloadPage() {
                             <td className="px-3 py-2">
                               <span className="text-xs font-mono text-gray-300">{(row as any).title || "—"}</span>
                             </td>
-                            <td className="px-3 py-2 max-w-[280px]">
+                            <td className="px-3 py-2">
                               <span className="text-xs font-mono text-emerald-400 truncate block" title={(row as any)["search-filter-rules.AllTime.predicate"]}>
                                 {(row as any)["search-filter-rules.AllTime.predicate"] || "—"}
                               </span>
@@ -557,7 +557,7 @@ export function WorkloadPage() {
                                 </span>
                               ) : <span className="text-gray-600 text-xs">—</span>}
                             </td>
-                            <td className="px-3 py-2 max-w-[240px]">
+                            <td className="px-3 py-2">
                               <span className="text-xs text-gray-400 truncate block" title={(row as any)["search-filter-rules.AllTime.user_message"]}>
                                 {(row as any)["search-filter-rules.AllTime.user_message"] || "—"}
                               </span>
@@ -653,7 +653,7 @@ export function WorkloadPage() {
                     <tbody>
                       {wlmDetails.map((row, i) => (
                         <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
-                          <td className="px-3 py-2 max-w-[220px]">
+                          <td className="px-3 py-2">
                             <span className="text-xs font-mono text-gray-200 truncate block" title={(row as any).search_name}>{(row as any).search_name || "—"}</span>
                           </td>
                           <td className="px-3 py-2"><span className="text-xs text-gray-400">{(row as any).app || "—"}</span></td>
@@ -666,7 +666,7 @@ export function WorkloadPage() {
                               {(row as any).search_type || "—"}
                             </span>
                           </td>
-                          <td className="px-3 py-2 max-w-[180px]">
+                          <td className="px-3 py-2">
                             <span className="text-xs font-mono text-violet-400 truncate block" title={(row as any).prefilter_rule}>{(row as any).prefilter_rule || "—"}</span>
                           </td>
                           <td className="px-3 py-2">
