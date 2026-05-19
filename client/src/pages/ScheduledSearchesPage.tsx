@@ -1112,88 +1112,6 @@ export function ScheduledSearchesPage() {
           </div>
         )}
 
-        {/* Email card */}
-        {showEfficiency && inefficientCount > 0 && (
-          <div className="mb-3 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
-            <button
-              onClick={() => setShowEmailCard((v) => !v)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
-            >
-              <Mail size={14} className="text-brand-400 shrink-0" />
-              <span className="text-sm font-semibold text-white flex-1">Email Template</span>
-              <span className="text-[10px] text-gray-500 mr-2">Pre-canned customer communication for inefficient searches</span>
-              {showEmailCard ? <ChevronUp size={13} className="text-gray-500 shrink-0" /> : <ChevronDown size={13} className="text-gray-500 shrink-0" />}
-            </button>
-
-            {showEmailCard && (() => {
-              const stackShort = extractStackName(splunkServerName);
-              const subject = stackShort
-                ? `Splunk Scheduled Search Efficiency Review — Stack: ${stackShort}`
-                : `Splunk Scheduled Search Efficiency Review`;
-              const body = `Hello,
-
-As part of our review of your Splunk Cloud environment, we have identified a number of scheduled searches that are operating inefficiently. Please find attached both a PDF report and CSV export of all searches identified.
-
-What are inefficient scheduled searches?
-
-A scheduled search is considered inefficient when its configured time window — the span between the Earliest and Latest time settings — is greater than the frequency at which the search runs (Cron Schedule). This results in each execution re-scanning data already covered by the previous run, creating unnecessary overlap and consuming additional search resources.
-
-Why does this matter?
-
-Inefficient searches can:
-  - Increase CPU and memory load on your Search Heads and Indexers
-  - Cause longer runtimes that delay other concurrent work
-  - Lead to searches being skipped when concurrency limits are reached
-  - Contribute to degraded search performance across the platform
-
-Recommendation
-
-We recommend updating the Earliest and Latest time of each affected search so the scan window aligns with the run interval, unless a broader window is specifically required by the search logic.
-
-Example:
-A search scheduled to run every 5 minutes (cron: */5 * * * *) should be configured as:
-  Earliest: -5m
-  Latest:   now
-
-If that same search is currently set to Earliest: -1h / Latest: now, it is scanning 60 minutes of data on every 5-minute run — a 12x overlap — which is unnecessary and puts undue load on the platform.
-
-We have included both a PDF report and CSV export identifying all scheduled searches flagged as inefficient based on their Frequency (Cron Schedule) and Duration (span between Earliest and Latest time). Please review the attached files and update the search configurations accordingly.
-${wlmAllTimeRule ? `
-Note Regarding All-Time Searches
-
-We have also identified that a Workload Management (WLM) Admission Rule is currently active on your Search Heads that targets all-time searches (predicate: ${wlmAllTimeRule}). All-time searches identified in the attached report are being blocked or throttled by this rule. While this rule helps protect your environment from unbounded searches, we still recommend updating the time range of these searches to align with their cron interval as a permanent resolution.` : ""}
-If you have any questions or need assistance making these changes, please don't hesitate to reach out.
-
-Kindly,
-Splunk Support`;
-
-              return (
-                <div className="border-t border-surface-border px-4 pb-4 pt-3 flex flex-col gap-3">
-                  {/* Subject */}
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Subject</span>
-                    <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface px-3 py-2">
-                      <span className="text-xs text-gray-200 flex-1 font-mono">{subject}</span>
-                      <CopyButton text={subject} />
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Body</span>
-                      <CopyButton text={body} />
-                    </div>
-                    <pre className="rounded-lg border border-surface-border bg-surface px-4 py-3 text-xs text-gray-300 whitespace-pre-wrap font-sans leading-relaxed overflow-auto max-h-96 select-all">
-                      {body}
-                    </pre>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
         {/* Results table */}
         {loading && results.length === 0 ? (
           <div className="flex items-center justify-center py-12">
@@ -1530,6 +1448,88 @@ Splunk Support`;
           </p>
         )}
 
+
+        {/* Email card */}
+        {showEfficiency && inefficientCount > 0 && (
+          <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+            <button
+              onClick={() => setShowEmailCard((v) => !v)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
+            >
+              <Mail size={14} className="text-brand-400 shrink-0" />
+              <span className="text-sm font-semibold text-white flex-1">Email Template</span>
+              <span className="text-[10px] text-gray-500 mr-2">Pre-canned customer communication for inefficient searches</span>
+              {showEmailCard ? <ChevronUp size={13} className="text-gray-500 shrink-0" /> : <ChevronDown size={13} className="text-gray-500 shrink-0" />}
+            </button>
+
+            {showEmailCard && (() => {
+              const stackShort = extractStackName(splunkServerName);
+              const subject = stackShort
+                ? `Splunk Scheduled Search Efficiency Review — Stack: ${stackShort}`
+                : `Splunk Scheduled Search Efficiency Review`;
+              const body = `Hello,
+
+As part of our review of your Splunk Cloud environment, we have identified a number of scheduled searches that are operating inefficiently. Please find attached both a PDF report and CSV export of all searches identified.
+
+What are inefficient scheduled searches?
+
+A scheduled search is considered inefficient when its configured time window — the span between the Earliest and Latest time settings — is greater than the frequency at which the search runs (Cron Schedule). This results in each execution re-scanning data already covered by the previous run, creating unnecessary overlap and consuming additional search resources.
+
+Why does this matter?
+
+Inefficient searches can:
+  - Increase CPU and memory load on your Search Heads and Indexers
+  - Cause longer runtimes that delay other concurrent work
+  - Lead to searches being skipped when concurrency limits are reached
+  - Contribute to degraded search performance across the platform
+
+Recommendation
+
+We recommend updating the Earliest and Latest time of each affected search so the scan window aligns with the run interval, unless a broader window is specifically required by the search logic.
+
+Example:
+A search scheduled to run every 5 minutes (cron: */5 * * * *) should be configured as:
+  Earliest: -5m
+  Latest:   now
+
+If that same search is currently set to Earliest: -1h / Latest: now, it is scanning 60 minutes of data on every 5-minute run — a 12x overlap — which is unnecessary and puts undue load on the platform.
+
+We have included both a PDF report and CSV export identifying all scheduled searches flagged as inefficient based on their Frequency (Cron Schedule) and Duration (span between Earliest and Latest time). Please review the attached files and update the search configurations accordingly.
+${wlmAllTimeRule ? `
+Note Regarding All-Time Searches
+
+We have also identified that a Workload Management (WLM) Admission Rule is currently active on your Search Heads that targets all-time searches (predicate: ${wlmAllTimeRule}). All-time searches identified in the attached report are being blocked or throttled by this rule. While this rule helps protect your environment from unbounded searches, we still recommend updating the time range of these searches to align with their cron interval as a permanent resolution.` : ""}
+If you have any questions or need assistance making these changes, please don't hesitate to reach out.
+
+Kindly,
+Splunk Support`;
+
+              return (
+                <div className="border-t border-surface-border px-4 pb-4 pt-3 flex flex-col gap-3">
+                  {/* Subject */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Subject</span>
+                    <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface px-3 py-2">
+                      <span className="text-xs text-gray-200 flex-1 font-mono">{subject}</span>
+                      <CopyButton text={subject} />
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Body</span>
+                      <CopyButton text={body} />
+                    </div>
+                    <pre className="rounded-lg border border-surface-border bg-surface px-4 py-3 text-xs text-gray-300 whitespace-pre-wrap font-sans leading-relaxed overflow-auto max-h-96 select-all">
+                      {body}
+                    </pre>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Scheduled Search Inefficiency Audit */}
         <LoggerPanel />
