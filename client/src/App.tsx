@@ -10,13 +10,13 @@ export default function App() {
   const globalTimeState = useGlobalTimeState();
   const [connectionChecked, setConnectionChecked] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [initialBaseUrl, setInitialBaseUrl] = useState("https://127.0.0.1:8089");
+  const [initialBaseUrl, setInitialBaseUrl] = useState("https://35.169.157.99:8089");
 
   useEffect(() => {
     fetch("/api/config")
       .then((r) => r.json())
       .then((cfg) => {
-        setInitialBaseUrl(cfg.baseUrl || "https://127.0.0.1:8089");
+        setInitialBaseUrl(cfg.baseUrl || "https://35.169.157.99:8089");
         setIsConnected(!!(cfg.hasToken || cfg.hasPassword));
       })
       .catch(() => {})

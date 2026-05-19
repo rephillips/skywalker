@@ -9,7 +9,7 @@ interface Props {
 
 export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
   const navigate = useNavigate();
-  const [baseUrl, setBaseUrl] = useState(initialBaseUrl || "https://127.0.0.1:8089");
+  const [baseUrl, setBaseUrl] = useState(initialBaseUrl || "https://35.169.157.99:8089");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
