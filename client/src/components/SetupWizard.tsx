@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { CheckCircle, XCircle, Loader2, Plug, Shield, Zap } from "lucide-react";
 
 interface Props {
@@ -8,7 +7,6 @@ interface Props {
 }
 
 export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
-  const navigate = useNavigate();
   const [baseUrl, setBaseUrl] = useState(initialBaseUrl || "https://35.169.157.99:8089");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,10 +31,7 @@ export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
         setConnected(true);
         setMessage({ type: "ok", text: `Connected — ${data.message || "ready"}` });
         window.dispatchEvent(new Event("skywalker-connection-changed"));
-        setTimeout(() => {
-          onConnected();
-          navigate("/shc", { replace: true });
-        }, 900);
+        setTimeout(() => onConnected(), 900);
       } else {
         setMessage({ type: "error", text: data.message || "Connection failed" });
       }
