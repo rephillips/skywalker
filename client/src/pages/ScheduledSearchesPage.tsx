@@ -94,16 +94,12 @@ function analyzeEfficiency(runTimeSec: number | null, timeWindowSec: number | nu
   return { valueSec: val, cronIntervalSec: ci, ratio, status: "critical", message: `${label} ${suffix} — Heavy overlap`, source };
 }
 
-/** Flag searches with no lower time bound (earliest=0 or unset) — scans all historical data */
 function isAllTimeSearch(earliest: string, latest: string): boolean {
   const e = (earliest || "").trim();
   const l = (latest || "").trim();
-  // earliest="0" is epoch start; empty means no bound configured
-  // latest empty/"0" alongside empty earliest also indicates all-time
-  return e === "0" || e === "" || (e === "0" && (l === "0" || l === ""));
+  return (e === "0" || e === "") && (l === "0" || l === "" || l === "now");
 }
 
-/** Flag searches whose SPL uses | rest or | inputlookup and has no index= reference */
 function isRestApiSearch(spl: string): boolean {
   if (!spl) return false;
   return /^\s*\|\s*(rest|inputlookup)\b/i.test(spl) && !/\bindex\s*=/i.test(spl);
@@ -682,6 +678,9 @@ export function ScheduledSearchesPage() {
       const title = r["title"] || "";
       const rt = runTimes[title] ?? null;
       const tw = computeTimeWindowSeconds(effectiveEarliest, effectiveLatest);
+      const dispatchEarliest = r["dispatch.earliest_time"] || "";
+      const dispatchLatest = r["dispatch.latest_time"] || "";
+      const spl = r["search"] || "";
       return {
         ...r,
         _inlineOverrides: inlineOverrides,
@@ -694,8 +693,14 @@ export function ScheduledSearchesPage() {
   }, [results, runTimes]);
 
   const filtered = rowsWithEfficiency.filter((r) => {
-    if (!filter) return true;
-    return Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(lowerFilter));
+    const matchesText = !filter || Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(lowerFilter));
+    if (!matchesText) return false;
+    if (showEfficiency) {
+      if (r._isNoIndex) return false;
+      if (r._isAllTime) return true;
+      return (r._efficiency.ratio ?? 0) > 1.0;
+    }
+    return true;
   });
 
   function handleSort(key: string) {
@@ -718,10 +723,14 @@ export function ScheduledSearchesPage() {
     });
   }
 
-  // Apply efficiency sort first, then column sort on top
+  // Apply efficiency sort first (all-time floats to top), then column sort on top
   const sorted = useMemo(() => {
     let base = showEfficiency && !sortCol
-      ? [...filtered].sort((a, b) => (b._efficiency.ratio ?? 0) - (a._efficiency.ratio ?? 0))
+      ? [...filtered].sort((a, b) => {
+          if (a._isAllTime && !b._isAllTime) return -1;
+          if (!a._isAllTime && b._isAllTime) return 1;
+          return (b._efficiency.ratio ?? 0) - (a._efficiency.ratio ?? 0);
+        })
       : [...filtered];
     if (sortCol) {
       base.sort((a, b) => {
@@ -976,7 +985,9 @@ export function ScheduledSearchesPage() {
                     if (groupBy && collapsedGroups.has(groupKey)) return null;
 
                     const eff = row._efficiency;
-                    const rowHighlight = showEfficiency && eff.status === "critical"
+                    const rowHighlight = showEfficiency && row._isAllTime
+                      ? "bg-orange-500/5"
+                      : showEfficiency && eff.status === "critical"
                       ? "bg-red-500/5"
                       : showEfficiency && eff.status === "warning"
                       ? "bg-amber-500/5"
@@ -991,32 +1002,44 @@ export function ScheduledSearchesPage() {
                         {showEfficiency && (
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
-                              <div
-                                className="w-2.5 h-2.5 rounded-full shrink-0"
-                                style={{
-                                  backgroundColor: eff.status === "ok" ? "#10b981"
-                                    : eff.status === "warning" ? "#eab308"
-                                    : eff.status === "critical" ? "#ef4444"
-                                    : "#6b7280",
-                                  boxShadow: eff.status === "critical" ? "0 0 6px #ef444480" : undefined,
-                                }}
-                              />
-                              <div className="flex flex-col">
-                                <span className={clsx("text-[10px] font-medium", {
-                                  "text-emerald-400": eff.status === "ok",
-                                  "text-amber-400": eff.status === "warning",
-                                  "text-red-400": eff.status === "critical",
-                                  "text-gray-500": eff.status === "unknown",
-                                })}>
-                                  {eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?"}
-                                </span>
-                                <span className="text-[9px] text-gray-500">
-                                  {eff.valueSec !== null && eff.cronIntervalSec !== null
-                                    ? `${formatSeconds(eff.valueSec)} ${eff.source === "run_time" ? "run" : "window"} / ${formatSeconds(eff.cronIntervalSec)} interval`
-                                    : eff.message}
-                                </span>
-                              </div>
-                              {(eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
+                              {row._isAllTime ? (
+                                <>
+                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: "#f97316", boxShadow: "0 0 6px #f9731680" }} />
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-medium text-orange-400">all-time</span>
+                                    <span className="text-[9px] text-gray-500">no time bound</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div
+                                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style={{
+                                      backgroundColor: eff.status === "ok" ? "#10b981"
+                                        : eff.status === "warning" ? "#eab308"
+                                        : eff.status === "critical" ? "#ef4444"
+                                        : "#6b7280",
+                                      boxShadow: eff.status === "critical" ? "0 0 6px #ef444480" : undefined,
+                                    }}
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className={clsx("text-[10px] font-medium", {
+                                      "text-emerald-400": eff.status === "ok",
+                                      "text-amber-400": eff.status === "warning",
+                                      "text-red-400": eff.status === "critical",
+                                      "text-gray-500": eff.status === "unknown",
+                                    })}>
+                                      {eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?"}
+                                    </span>
+                                    <span className="text-[9px] text-gray-500">
+                                      {eff.valueSec !== null && eff.cronIntervalSec !== null
+                                        ? `${formatSeconds(eff.valueSec)} ${eff.source === "run_time" ? "run" : "window"} / ${formatSeconds(eff.cronIntervalSec)} interval`
+                                        : eff.message}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                              {!row._isAllTime && (eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); startFix(i, row); }}
                                   className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
