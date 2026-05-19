@@ -574,6 +574,7 @@ export function ScheduledSearchesPage() {
   const [runTimes, setRunTimes] = useState<Record<string, number>>({});
   const [runTimesLoading, setRunTimesLoading] = useState(false);
   const [splunkServerName, setSplunkServerName] = useState("");
+  const [wlmAllTimeRule, setWlmAllTimeRule] = useState<string | null>(null);
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [groupBy, setGroupBy] = useState<string>("");
@@ -678,6 +679,18 @@ export function ScheduledSearchesPage() {
             || "";
           setSplunkServerName(name);
         }
+      })
+      .catch(() => {});
+
+    api.proxy("workloads/rules")
+      .then((res) => {
+        if (res.status !== "ok") return;
+        const match = (res.data?.entry ?? []).find((e: any) => {
+          const predicate: string = e.content?.predicate ?? "";
+          const disabled = e.content?.disabled === "1" || e.content?.disabled === true;
+          return !disabled && /search_time_range\s*=\s*alltime/i.test(predicate);
+        });
+        setWlmAllTimeRule(match ? match.name : null);
       })
       .catch(() => {});
   }, []);
@@ -1204,8 +1217,13 @@ export function ScheduledSearchesPage() {
                               {row._isAllTime ? (
                                 <>
                                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: "#ef4444", boxShadow: "0 0 6px #ef444480" }} />
-                                  <div className="flex flex-col">
+                                  <div className="flex flex-col gap-0.5">
                                     <span className="text-[10px] font-medium text-red-400">All-Time Search</span>
+                                    {wlmAllTimeRule && (
+                                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-400 border border-violet-500/25 whitespace-nowrap">
+                                        Filtered by WLM Rule
+                                      </span>
+                                    )}
                                   </div>
                                 </>
                               ) : (
