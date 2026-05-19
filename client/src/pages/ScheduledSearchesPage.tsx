@@ -568,6 +568,7 @@ export function ScheduledSearchesPage() {
   const [showEmailCard, setShowEmailCard] = useState(false);
   const [spl, setSpl] = useState(ENABLED_SPL);
   const [editSpl, setEditSpl] = useState(false);
+  const [showSpl, setShowSpl] = useState(false);
   const [customSpl, setCustomSpl] = useState(ENABLED_SPL);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [fixingRow, setFixingRow] = useState<number | null>(null);
@@ -910,41 +911,6 @@ export function ScheduledSearchesPage() {
 
         {error && <div className="mb-4"><ErrorAlert message={error} /></div>}
 
-        {/* SPL query display */}
-        <div className="rounded-xl border border-surface-border bg-surface-raised p-3 mb-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
-            <button
-              onClick={() => setEditSpl(!editSpl)}
-              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
-            >
-              {editSpl ? "Cancel" : "Edit"}
-            </button>
-          </div>
-          {editSpl ? (
-            <div className="flex gap-2">
-              <textarea
-                value={customSpl}
-                onChange={(e) => setCustomSpl(e.target.value)}
-                rows={3}
-                className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-none"
-                spellCheck={false}
-              />
-              <button
-                onClick={() => { setSpl(customSpl); setEditSpl(false); }}
-                className="self-start rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors"
-              >
-                Run
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2">
-              <pre className="flex-1 text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{spl}</pre>
-              <CopyButton text={spl} />
-            </div>
-          )}
-        </div>
-
         {/* Toolbar */}
         <div className="flex items-center gap-3 mb-4 flex-wrap">
           <input
@@ -1235,6 +1201,22 @@ Splunk Support`;
           </div>
         ) : (
           <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+            {/* SPL query — collapsed by default, top-right of table */}
+            <div className="flex items-center justify-end border-b border-surface-border/50 px-3 py-1.5 bg-surface-raised">
+              <button
+                onClick={() => setShowSpl((v) => !v)}
+                className="flex items-center gap-1.5 text-[10px] text-emerald-500/70 hover:text-emerald-400 transition-colors font-mono"
+              >
+                <span>SPL</span>
+                {showSpl ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              </button>
+            </div>
+            {showSpl && (
+              <div className="border-b border-surface-border/50 px-3 py-2 bg-surface flex items-start gap-2">
+                <pre className="flex-1 text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all leading-relaxed">{spl}</pre>
+                <CopyButton text={spl} />
+              </div>
+            )}
             <div className="overflow-auto max-h-[calc(100vh-400px)]">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-surface-raised z-10">
