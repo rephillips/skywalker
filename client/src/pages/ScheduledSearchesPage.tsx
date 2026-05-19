@@ -103,12 +103,10 @@ function isAllTimeSearch(earliest: string, latest: string): boolean {
   return e === "0" || e === "" || (e === "0" && (l === "0" || l === ""));
 }
 
-/** Flag searches whose SPL only uses non-index generating commands */
-function isNoIndexSearch(spl: string): boolean {
+/** Flag searches whose SPL uses | rest or | inputlookup and has no index= reference */
+function isRestApiSearch(spl: string): boolean {
   if (!spl) return false;
-  // Strip leading whitespace; if the first command is | rest or | inputlookup
-  // the search never touches an index
-  return /^\s*\|\s*(rest|inputlookup)\b/i.test(spl);
+  return /^\s*\|\s*(rest|inputlookup)\b/i.test(spl) && !/\bindex\s*=/i.test(spl);
 }
 
 /** Detect inline earliest=/latest= in SPL that override dispatch times */
@@ -200,7 +198,7 @@ function extractStackName(fqdn: string): string {
 }
 
 function generatePDFReport(rows: any[], serverName = "") {
-  const inefficient = rows.filter((r) => (r._efficiency?.ratio ?? 0) > 1.0);
+  const inefficient = rows.filter((r) => (r._efficiency?.ratio ?? 0) > 1.0 || r._isAllTime);
   if (!inefficient.length) return;
 
   const stackName = extractStackName(serverName);
@@ -212,7 +210,7 @@ function generatePDFReport(rows: any[], serverName = "") {
     const ratioColor = isCritical ? "#dc2626" : "#d97706";
     const tags = [
       r._isAllTime ? "all-time" : null,
-      r._isNoIndex ? "no index" : null,
+      r._isNoIndex ? "rest api search" : null,
     ].filter(Boolean);
 
     return `
@@ -690,7 +688,7 @@ export function ScheduledSearchesPage() {
         _effectiveEarliest: effectiveEarliest,
         _efficiency: analyzeEfficiency(rt, tw, r["cron_schedule"] || ""),
         _isAllTime: isAllTimeSearch(r["dispatch.earliest_time"] || "", r["dispatch.latest_time"] || ""),
-        _isNoIndex: isNoIndexSearch(r["search"] || ""),
+        _isNoIndex: isRestApiSearch(r["search"] || ""),
       };
     });
   }, [results, runTimes]);
@@ -1046,7 +1044,7 @@ export function ScheduledSearchesPage() {
                                   )}
                                   {row._isNoIndex && (
                                     <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-sky-500/15 text-sky-400 border border-sky-500/25">
-                                      no index
+                                      rest api search
                                     </span>
                                   )}
                                 </div>
