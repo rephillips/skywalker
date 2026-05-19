@@ -1051,6 +1051,26 @@ export function ScheduledSearchesPage() {
           </button>
         </div>
 
+        {/* Efficiency legend — above table */}
+        {showEfficiency && (
+          <div className="mb-3 rounded-xl border border-surface-border bg-surface-raised p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-xs font-semibold text-white">Efficiency Analysis</h3>
+              {runTimesLoading && <span className="text-[10px] text-brand-400">Loading run times…</span>}
+            </div>
+            <p className="text-[10px] text-gray-500 mb-2">
+              Compares the latest run duration (from scheduler.log) or the scan window (earliest→latest) against the cron interval.
+              A ratio &gt;1x means the search scans more time than the interval allows, causing overlap or skipping.
+            </p>
+            <div className="flex gap-6 text-[10px]">
+              <span className="text-gray-400">≤ 1x — Efficient (window fits in interval)</span>
+              <span className="text-orange-400">&gt; 1x — Overlap</span>
+              <span className="text-red-400">All-Time Search — no time bound</span>
+              <span className="text-gray-500">? — No data</span>
+            </div>
+          </div>
+        )}
+
         {/* Results table */}
         {loading && results.length === 0 ? (
           <div className="flex items-center justify-center py-12">
@@ -1366,35 +1386,6 @@ export function ScheduledSearchesPage() {
           </p>
         )}
 
-        {/* Efficiency legend */}
-        {showEfficiency && (
-          <div className="mt-4 rounded-xl border border-surface-border bg-surface-raised p-4">
-            <h3 className="text-xs font-semibold text-white mb-2">Efficiency Analysis</h3>
-            <p className="text-[10px] text-gray-500 mb-3">
-              Compares the latest run duration (from scheduler.log) or the scan window (earliest→latest) against the cron interval.
-              A ratio &gt;1x means the search scans more time than the interval allows, causing overlap or skipping.
-              {runTimesLoading && <span className="ml-1 text-brand-400">Loading run times...</span>}
-            </p>
-            <div className="flex gap-6 text-[10px]">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-gray-400">≤ 1x — Efficient (window fits in interval)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-                <span className="text-gray-400">1–2x — Some overlap</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                <span className="text-gray-400">&gt; 2x — Heavy overlap</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-500" />
-                <span className="text-gray-400">No data</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Scheduled Search Inefficiency Audit */}
         <LoggerPanel />
