@@ -1,25 +1,45 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Loader2, Plug, Shield, Zap } from "lucide-react";
 
-interface Props {
-  initialBaseUrl: string;
-  onConnected: () => void;
-}
+type WizardState = "checking" | "form" | "success";
 
-export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
-  const [baseUrl, setBaseUrl] = useState(initialBaseUrl || "https://35.169.157.99:8089");
+export function SetupWizard({ onConnected }: { onConnected: () => void }) {
+  const [wizState, setWizState] = useState<WizardState>("checking");
+  const [baseUrl, setBaseUrl] = useState("https://35.169.157.99:8089");
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
-  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState("");
+
+  // On mount: test existing connection — auto-proceed if it works
+  useEffect(() => {
+    async function autoCheck() {
+      try {
+        const [cfg, test] = await Promise.all([
+          fetch("/api/config").then((r) => r.json()),
+          fetch("/api/config/test", { method: "POST" }).then((r) => r.json()),
+        ]);
+        if (cfg.baseUrl && !cfg.baseUrl.includes("127.0.0.1")) {
+          setBaseUrl(cfg.baseUrl);
+        }
+        if (test.status === "ok") {
+          setSuccessMsg(`Connected to ${test.serverName || cfg.baseUrl}`);
+          setWizState("success");
+          setTimeout(() => onConnected(), 1000);
+        } else {
+          setWizState("form");
+        }
+      } catch {
+        setWizState("form");
+      }
+    }
+    autoCheck();
+  }, []);
 
   async function handleConnect() {
-    if (!token.trim()) {
-      setMessage({ type: "error", text: "Enter an API token" });
-      return;
-    }
+    if (!token.trim()) { setError("Enter an API token"); return; }
     setSaving(true);
-    setMessage(null);
+    setError(null);
     try {
       const res = await fetch("/api/config", {
         method: "PUT",
@@ -28,15 +48,15 @@ export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
       });
       const data = await res.json();
       if (data.status === "ok" || data.status === "warning") {
-        setConnected(true);
-        setMessage({ type: "ok", text: `Connected — ${data.message || "ready"}` });
+        setSuccessMsg(data.message || "Connected");
+        setWizState("success");
         window.dispatchEvent(new Event("skywalker-connection-changed"));
         setTimeout(() => onConnected(), 900);
       } else {
-        setMessage({ type: "error", text: data.message || "Connection failed" });
+        setError(data.message || "Connection failed");
       }
     } catch (err) {
-      setMessage({ type: "error", text: (err as Error).message });
+      setError((err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -54,76 +74,87 @@ export function SetupWizard({ initialBaseUrl, onConnected }: Props) {
       />
 
       <div className="relative w-full max-w-md mx-4">
-        {/* Logo / branding */}
+        {/* Branding */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-brand-500/15 border border-brand-500/30 mb-3">
             <Zap size={22} className="text-brand-400" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Skywalker</h1>
-          <p className="text-sm text-gray-500 mt-1">Connect to your Splunk instance to get started</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {wizState === "checking" ? "Checking connection…" : wizState === "success" ? "Connection verified" : "Connect to your Splunk instance"}
+          </p>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-surface-border bg-surface-raised p-6 shadow-2xl">
-          <div className="flex items-center gap-2 mb-5">
-            <Shield size={15} className="text-brand-400" />
-            <h2 className="text-sm font-semibold text-white">Splunk Connection</h2>
-            <span className="text-[10px] text-gray-600 ml-auto">token held in memory only</span>
-          </div>
 
-          {/* URL */}
-          <label className="block mb-4">
-            <span className="text-xs font-medium text-gray-400 mb-1.5 block">Splunk REST API URL</span>
-            <input
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
-              placeholder="https://your-splunk-sh:8089"
-              disabled={connected}
-            />
-            <p className="text-[10px] text-gray-600 mt-1">Management port (8089), not the web UI (8000)</p>
-          </label>
-
-          {/* Token */}
-          <label className="block mb-5">
-            <span className="text-xs font-medium text-gray-400 mb-1.5 block">API Token</span>
-            <input
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleConnect()}
-              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
-              placeholder="Paste your Splunk API token"
-              disabled={connected}
-              autoFocus
-            />
-            <p className="text-[10px] text-gray-600 mt-1">
-              Settings → Tokens → New Token in Splunk Web
-            </p>
-          </label>
-
-          {/* Message */}
-          {message && (
-            <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm mb-4 ${
-              message.type === "ok"
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                : "bg-red-500/10 border border-red-500/20 text-red-400"
-            }`}>
-              {message.type === "ok" ? <CheckCircle size={15} /> : <XCircle size={15} />}
-              {message.text}
+          {/* Checking state */}
+          {wizState === "checking" && (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <Loader2 size={28} className="animate-spin text-brand-400" />
+              <p className="text-sm text-gray-400">Verifying existing connection…</p>
             </div>
           )}
 
-          {/* Connect button */}
-          <button
-            onClick={handleConnect}
-            disabled={saving || connected || !token.trim()}
-            className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : connected ? <CheckCircle size={15} /> : <Plug size={15} />}
-            {connected ? "Connected — loading SHC…" : saving ? "Connecting…" : "Connect"}
-          </button>
+          {/* Success state */}
+          {wizState === "success" && (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <CheckCircle size={28} className="text-emerald-400" />
+              <p className="text-sm text-emerald-300 font-medium">{successMsg}</p>
+              <p className="text-xs text-gray-500">Loading dashboard…</p>
+            </div>
+          )}
+
+          {/* Form state */}
+          {wizState === "form" && (
+            <>
+              <div className="flex items-center gap-2 mb-5">
+                <Shield size={15} className="text-brand-400" />
+                <h2 className="text-sm font-semibold text-white">Splunk Connection</h2>
+                <span className="text-[10px] text-gray-600 ml-auto">token held in memory only</span>
+              </div>
+
+              <label className="block mb-4">
+                <span className="text-xs font-medium text-gray-400 mb-1.5 block">Splunk REST API URL</span>
+                <input
+                  type="text"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
+                  placeholder="https://your-splunk-sh:8089"
+                />
+                <p className="text-[10px] text-gray-600 mt-1">Management port (8089), not the web UI (8000)</p>
+              </label>
+
+              <label className="block mb-5">
+                <span className="text-xs font-medium text-gray-400 mb-1.5 block">API Token</span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleConnect()}
+                  className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2.5 text-sm text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
+                  placeholder="Paste your Splunk API token"
+                  autoFocus
+                />
+                <p className="text-[10px] text-gray-600 mt-1">Settings → Tokens → New Token in Splunk Web</p>
+              </label>
+
+              {error && (
+                <div className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm mb-4 bg-red-500/10 border border-red-500/20 text-red-400">
+                  <XCircle size={15} /> {error}
+                </div>
+              )}
+
+              <button
+                onClick={handleConnect}
+                disabled={saving || !token.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
+                {saving ? "Connecting…" : "Connect"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
