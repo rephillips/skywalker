@@ -509,7 +509,7 @@ export function ScheduledSearchesPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [showDisabled, setShowDisabled] = useState(false);
-  const [showEfficiency, setShowEfficiency] = useState(false);
+  const [showEfficiency, setShowEfficiency] = useState(true);
   const [spl, setSpl] = useState(ENABLED_SPL);
   const [editSpl, setEditSpl] = useState(false);
   const [customSpl, setCustomSpl] = useState(ENABLED_SPL);
@@ -582,6 +582,7 @@ export function ScheduledSearchesPage() {
               search: entry.content?.search || "",
             }));
           setResults(parsed);
+          fetchRunTimes();
         }
       } else {
         // Custom SPL query
@@ -768,8 +769,7 @@ export function ScheduledSearchesPage() {
     return items;
   }, [sorted, groupBy]);
 
-  const inefficientCount = rowsWithEfficiency.filter((r) => r._efficiency.status === "warning" || r._efficiency.status === "critical").length;
-  const criticalCount = rowsWithEfficiency.filter((r) => r._efficiency.status === "critical").length;
+  const inefficientCount = rowsWithEfficiency.filter((r) => !r._isNoIndex && (r._isAllTime || (r._efficiency.ratio ?? 0) > 1.0)).length;
 
   const columns = [
     { key: "title", label: "Search Name" },
@@ -791,7 +791,6 @@ export function ScheduledSearchesPage() {
     <div className="flex-1 flex flex-col">
       <TopBar title="Scheduled Searches Audit" />
       <div className="p-6">
-        <LoggerPanel />
         {/* Summary */}
         <div className="flex gap-4 mb-6">
           <div className="flex-1 rounded-xl border border-surface-border bg-surface-raised p-4">
@@ -805,7 +804,7 @@ export function ScheduledSearchesPage() {
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle size={14} className="text-emerald-400" />
               <span className="text-2xl font-bold text-emerald-400">
-                {rowsWithEfficiency.filter((r) => r._efficiency.status === "ok").length}
+                {rowsWithEfficiency.filter((r) => !r._isAllTime && !r._isNoIndex && (r._efficiency.ratio ?? 1) <= 1.0 && r._efficiency.status !== "unknown").length}
               </span>
             </div>
             <p className="text-xs text-gray-500">Efficient</p>
@@ -815,14 +814,7 @@ export function ScheduledSearchesPage() {
               <AlertTriangle size={14} className="text-amber-400" />
               <span className="text-2xl font-bold text-amber-400">{inefficientCount}</span>
             </div>
-            <p className="text-xs text-gray-500">Overlapping</p>
-          </div>
-          <div className="flex-1 rounded-xl border border-surface-border bg-surface-raised p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap size={14} className="text-red-400" />
-              <span className="text-2xl font-bold text-red-400">{criticalCount}</span>
-            </div>
-            <p className="text-xs text-gray-500">Heavy overlap (&gt;2x)</p>
+            <p className="text-xs text-gray-500">Inefficient</p>
           </div>
         </div>
 
@@ -888,18 +880,32 @@ export function ScheduledSearchesPage() {
               </button>
             ))}
           </div>
-          <button
-            onClick={() => { const next = !showEfficiency; setShowEfficiency(next); if (next) fetchRunTimes(); }}
-            className={clsx(
-              "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-              showEfficiency
-                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
-                : "bg-surface border border-surface-border text-gray-400 hover:text-gray-200"
-            )}
-          >
-            <Zap size={12} />
-            Find Inefficiency
-          </button>
+          <div className="flex rounded-lg border border-surface-border overflow-hidden">
+            <button
+              onClick={() => setShowEfficiency(false)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                !showEfficiency
+                  ? "bg-brand-500/15 text-brand-400"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-surface-hover"
+              )}
+            >
+              Show All
+            </button>
+            <div className="w-px bg-surface-border" />
+            <button
+              onClick={() => setShowEfficiency(true)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                showEfficiency
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-surface-hover"
+              )}
+            >
+              <Zap size={12} />
+              Show Inefficient
+            </button>
+          </div>
           {showEfficiency && inefficientCount > 0 && (
             <button
               onClick={() => generatePDFReport(rowsWithEfficiency, splunkServerName)}
@@ -1279,6 +1285,7 @@ export function ScheduledSearchesPage() {
         )}
 
         {/* Scheduled Search Inefficiency Audit */}
+        <LoggerPanel />
         <AuditInefficiency />
       </div>
     </div>
