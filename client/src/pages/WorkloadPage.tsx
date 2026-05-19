@@ -167,7 +167,10 @@ export function WorkloadPage() {
   const content = rawStatus?.data?.entry?.[0]?.content ?? null;
 
   // enabled flag
-  const enabled: boolean = content ? parseBool(content.enabled ?? content.wlm_enabled) : false;
+  // Fall back to admCount as evidence of WLM being enabled when the proxy response fields don't parse
+  const enabled: boolean = content
+    ? parseBool(content.enabled ?? content.wlm_enabled ?? ((admCount ?? 0) > 0 ? "1" : "0"))
+    : (admCount ?? 0) > 0;
 
   // Pools — may be nested under content.pools or content["workload_pools"] or similar
   // We'll try multiple possible shapes and fall back gracefully
@@ -251,7 +254,10 @@ export function WorkloadPage() {
     ruleCountByPool[r.workload_pool] = (ruleCountByPool[r.workload_pool] ?? 0) + 1;
   }
 
-  const notConfigured = !loading && !error && content !== null && pools.length === 0 && rules.length === 0 && admissionRules.length === 0;
+  // Only show "not configured" when both the proxy parsers AND the SPL-based count find nothing
+  const notConfigured = !loading && !error && content !== null
+    && pools.length === 0 && rules.length === 0 && admissionRules.length === 0
+    && !admCountLoading && (admCount ?? 0) === 0;
   const noData = !loading && !error && content === null;
 
   return (
@@ -259,6 +265,159 @@ export function WorkloadPage() {
       <TopBar title="Workload Management" />
 
       <div className="p-6 flex flex-col gap-6">
+        {/* ── Knowledge Card ── */}
+        <section>
+          <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+            <button
+              onClick={() => setShowKnowledge((v) => !v)}
+              className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-surface-hover transition-colors"
+            >
+              <BookOpen size={15} className="text-brand-400 shrink-0" />
+              <span className="text-sm font-semibold text-white flex-1">How Splunk Workload Management Works</span>
+              {showKnowledge ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
+            </button>
+
+            {showKnowledge && (
+              <div className="px-5 pb-6 pt-1 border-t border-surface-border flex flex-col gap-6">
+
+                {/* Overview */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">Overview</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed">
+                    Workload Management (WLM) gives Splunk administrators control over how CPU and memory are allocated across concurrent workloads — searches, reports, and data ingestion. Without WLM, a single expensive search can starve all other activity. WLM enforces resource fairness through three cooperating concepts: <span className="text-white font-medium">Pools</span>, <span className="text-white font-medium">Placement Rules</span>, and <span className="text-white font-medium">Admission Rules</span>.
+                  </p>
+                </div>
+
+                {/* Evaluation flow */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3">Evaluation Order (per search)</h3>
+                  <div className="flex flex-col gap-0">
+                    {[
+                      { step: "1", label: "Search submitted", sub: "User or scheduler dispatches a search", color: "text-gray-400", dot: "bg-gray-500" },
+                      { step: "2", label: "Admission Rules evaluated", sub: "Ordered list checked top-to-bottom; first match wins. Can reject or throttle before the search ever runs.", color: "text-violet-400", dot: "bg-violet-500" },
+                      { step: "3", label: "Placement Rules evaluated", sub: "Ordered list checked top-to-bottom; first match assigns the search to a named pool.", color: "text-blue-400", dot: "bg-blue-500" },
+                      { step: "4", label: "Pool enforces resource share", sub: "CPU and memory weights control how much of the system this pool can use relative to other active pools.", color: "text-emerald-400", dot: "bg-emerald-500" },
+                    ].map((item, i, arr) => (
+                      <div key={item.step} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={clsx("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0", item.dot)}>{item.step}</div>
+                          {i < arr.length - 1 && <div className="w-px flex-1 bg-surface-border my-0.5" />}
+                        </div>
+                        <div className="pb-4">
+                          <p className={clsx("text-xs font-semibold", item.color)}>{item.label}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{item.sub}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Three pillars */}
+                <div className="grid grid-cols-3 gap-4">
+                  {/* Pools */}
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                      <span className="text-xs font-bold text-blue-300">Workload Pools</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">Resource buckets that represent a share of CPU and memory. Pools compete proportionally based on their weights — a pool with cpu_weight 50 gets roughly half the CPU versus a pool with weight 50 when both are busy.</p>
+                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1 list-none">
+                      <li><span className="text-gray-300 font-mono">cpu_weight</span> — proportional CPU share (0–100)</li>
+                      <li><span className="text-gray-300 font-mono">mem_weight</span> — proportional memory share</li>
+                      <li><span className="text-gray-300 font-mono">category</span> — search or ingest</li>
+                      <li><span className="text-gray-300 font-mono">default_category_pool</span> — catch-all for unmatched searches in that category</li>
+                    </ul>
+                  </div>
+
+                  {/* Admission rules */}
+                  <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-violet-400 shrink-0" />
+                      <span className="text-xs font-bold text-violet-300">Admission Rules</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">Gate rules that run before a search is accepted. Useful for rejecting or queuing work that would overwhelm the system (e.g., all-time searches during peak hours).</p>
+                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1">
+                      <li><span className="text-red-400 font-mono">reject</span> — search fails immediately with an error</li>
+                      <li><span className="text-amber-400 font-mono">throttle</span> — search waits in a queue until capacity is available</li>
+                      <li><span className="text-emerald-400 font-mono">allow</span> — explicitly permits the search through (overrides later deny rules)</li>
+                    </ul>
+                  </div>
+
+                  {/* Placement rules */}
+                  <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                      <span className="text-xs font-bold text-cyan-300">Placement Rules</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">Routing rules that map matching searches to a specific pool. Evaluated in order; the first match wins. Unmatched searches fall into the default pool for their category.</p>
+                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1">
+                      <li><span className="text-gray-300 font-mono">predicate</span> — condition to match (e.g., role=admin)</li>
+                      <li><span className="text-gray-300 font-mono">workload_pool</span> — pool to assign when matched</li>
+                      <li><span className="text-gray-300 font-mono">order</span> — evaluation priority (lower = first)</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Common predicates */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3">Common Predicate Conditions</h3>
+                  <div className="rounded-lg border border-surface-border overflow-hidden">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-surface-border">
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Predicate</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500">What It Matches</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500">Typical Use</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { pred: "search_time_range=alltime", match: "Searches with no time bound (earliest=0, latest=now or blank)", use: "Reject or throttle expensive all-time scans" },
+                          { pred: "search_type=scheduled", match: "Scheduled searches (reports, alerts, dashboards)", use: "Route scheduled work to a dedicated pool" },
+                          { pred: "search_type=ad_hoc", match: "Interactive ad-hoc searches", use: "Isolate analyst searches from background jobs" },
+                          { pred: "role=admin", match: "Searches dispatched by users with the admin role", use: "Give admin investigations higher (or lower) priority" },
+                          { pred: "user=splunk-system-user", match: "Internal system searches (summary indexing, etc.)", use: "Protect system processes with a reserved pool" },
+                          { pred: "app=search", match: "Searches originating from the Search & Reporting app", use: "Separate interactive searches from app-embedded ones" },
+                          { pred: "index=main", match: "Searches that reference a specific index", use: "Route high-volume index searches to a low-weight pool" },
+                        ].map((row) => (
+                          <tr key={row.pred} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
+                            <td className="px-3 py-2 whitespace-nowrap"><span className="text-[11px] font-mono text-emerald-400">{row.pred}</span></td>
+                            <td className="px-3 py-2"><span className="text-[11px] text-gray-400">{row.match}</span></td>
+                            <td className="px-3 py-2"><span className="text-[11px] text-gray-500">{row.use}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[10px] text-gray-600 mt-1.5">Multiple conditions can be combined with AND / OR: <span className="font-mono text-gray-500">search_time_range=alltime AND role!=admin</span></p>
+                </div>
+
+                {/* REST endpoints */}
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">REST API Reference</h3>
+                  <div className="rounded-lg border border-surface-border bg-surface/50 p-3 flex flex-col gap-1.5">
+                    {[
+                      { path: "GET /services/workloads/status", desc: "Full snapshot — enabled flag, all pools, all rules (used by this page)" },
+                      { path: "GET /services/workloads/config", desc: "WLM enabled/disabled flag only" },
+                      { path: "GET /services/workloads/pools", desc: "Pool definitions (name, weights, category)" },
+                      { path: "GET /services/workloads/rules", desc: "Placement rules (predicate → pool mapping)" },
+                      { path: "GET /services/workloads/admission-rules", desc: "Admission rules (predicate → action)" },
+                      { path: "POST /services/workloads/config", desc: "Enable or disable WLM (requires admin)" },
+                    ].map((r) => (
+                      <div key={r.path} className="flex items-start gap-3">
+                        <span className="text-[10px] font-mono text-blue-400/80 whitespace-nowrap shrink-0 pt-px">{r.path}</span>
+                        <ArrowRight size={10} className="text-gray-600 shrink-0 mt-[3px]" />
+                        <span className="text-[10px] text-gray-500">{r.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </section>
+
         {loading && (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={20} className="animate-spin text-brand-400" />
@@ -687,158 +846,6 @@ export function WorkloadPage() {
           )}
         </section>
 
-        {/* ── Knowledge Card ── */}
-        <section>
-          <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
-            <button
-              onClick={() => setShowKnowledge((v) => !v)}
-              className="w-full flex items-center gap-3 px-5 py-3.5 text-left hover:bg-surface-hover transition-colors"
-            >
-              <BookOpen size={15} className="text-brand-400 shrink-0" />
-              <span className="text-sm font-semibold text-white flex-1">How Splunk Workload Management Works</span>
-              {showKnowledge ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
-            </button>
-
-            {showKnowledge && (
-              <div className="px-5 pb-6 pt-1 border-t border-surface-border flex flex-col gap-6">
-
-                {/* Overview */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">Overview</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed">
-                    Workload Management (WLM) gives Splunk administrators control over how CPU and memory are allocated across concurrent workloads — searches, reports, and data ingestion. Without WLM, a single expensive search can starve all other activity. WLM enforces resource fairness through three cooperating concepts: <span className="text-white font-medium">Pools</span>, <span className="text-white font-medium">Placement Rules</span>, and <span className="text-white font-medium">Admission Rules</span>.
-                  </p>
-                </div>
-
-                {/* Evaluation flow */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3">Evaluation Order (per search)</h3>
-                  <div className="flex flex-col gap-0">
-                    {[
-                      { step: "1", label: "Search submitted", sub: "User or scheduler dispatches a search", color: "text-gray-400", dot: "bg-gray-500" },
-                      { step: "2", label: "Admission Rules evaluated", sub: "Ordered list checked top-to-bottom; first match wins. Can reject or throttle before the search ever runs.", color: "text-violet-400", dot: "bg-violet-500" },
-                      { step: "3", label: "Placement Rules evaluated", sub: "Ordered list checked top-to-bottom; first match assigns the search to a named pool.", color: "text-blue-400", dot: "bg-blue-500" },
-                      { step: "4", label: "Pool enforces resource share", sub: "CPU and memory weights control how much of the system this pool can use relative to other active pools.", color: "text-emerald-400", dot: "bg-emerald-500" },
-                    ].map((item, i, arr) => (
-                      <div key={item.step} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={clsx("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0", item.dot)}>{item.step}</div>
-                          {i < arr.length - 1 && <div className="w-px flex-1 bg-surface-border my-0.5" />}
-                        </div>
-                        <div className="pb-4">
-                          <p className={clsx("text-xs font-semibold", item.color)}>{item.label}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{item.sub}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Three pillars */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Pools */}
-                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                      <span className="text-xs font-bold text-blue-300">Workload Pools</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 leading-relaxed">Resource buckets that represent a share of CPU and memory. Pools compete proportionally based on their weights — a pool with cpu_weight 50 gets roughly half the CPU versus a pool with weight 50 when both are busy.</p>
-                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1 list-none">
-                      <li><span className="text-gray-300 font-mono">cpu_weight</span> — proportional CPU share (0–100)</li>
-                      <li><span className="text-gray-300 font-mono">mem_weight</span> — proportional memory share</li>
-                      <li><span className="text-gray-300 font-mono">category</span> — search or ingest</li>
-                      <li><span className="text-gray-300 font-mono">default_category_pool</span> — catch-all for unmatched searches in that category</li>
-                    </ul>
-                  </div>
-
-                  {/* Admission rules */}
-                  <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-violet-400 shrink-0" />
-                      <span className="text-xs font-bold text-violet-300">Admission Rules</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 leading-relaxed">Gate rules that run before a search is accepted. Useful for rejecting or queuing work that would overwhelm the system (e.g., all-time searches during peak hours).</p>
-                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1">
-                      <li><span className="text-red-400 font-mono">reject</span> — search fails immediately with an error</li>
-                      <li><span className="text-amber-400 font-mono">throttle</span> — search waits in a queue until capacity is available</li>
-                      <li><span className="text-emerald-400 font-mono">allow</span> — explicitly permits the search through (overrides later deny rules)</li>
-                    </ul>
-                  </div>
-
-                  {/* Placement rules */}
-                  <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                      <span className="text-xs font-bold text-cyan-300">Placement Rules</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 leading-relaxed">Routing rules that map matching searches to a specific pool. Evaluated in order; the first match wins. Unmatched searches fall into the default pool for their category.</p>
-                    <ul className="text-[11px] text-gray-500 flex flex-col gap-1">
-                      <li><span className="text-gray-300 font-mono">predicate</span> — condition to match (e.g., role=admin)</li>
-                      <li><span className="text-gray-300 font-mono">workload_pool</span> — pool to assign when matched</li>
-                      <li><span className="text-gray-300 font-mono">order</span> — evaluation priority (lower = first)</li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Common predicates */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3">Common Predicate Conditions</h3>
-                  <div className="rounded-lg border border-surface-border overflow-hidden">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-surface-border">
-                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Predicate</th>
-                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500">What It Matches</th>
-                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500">Typical Use</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { pred: "search_time_range=alltime", match: "Searches with no time bound (earliest=0, latest=now or blank)", use: "Reject or throttle expensive all-time scans" },
-                          { pred: "search_type=scheduled", match: "Scheduled searches (reports, alerts, dashboards)", use: "Route scheduled work to a dedicated pool" },
-                          { pred: "search_type=ad_hoc", match: "Interactive ad-hoc searches", use: "Isolate analyst searches from background jobs" },
-                          { pred: "role=admin", match: "Searches dispatched by users with the admin role", use: "Give admin investigations higher (or lower) priority" },
-                          { pred: "user=splunk-system-user", match: "Internal system searches (summary indexing, etc.)", use: "Protect system processes with a reserved pool" },
-                          { pred: "app=search", match: "Searches originating from the Search & Reporting app", use: "Separate interactive searches from app-embedded ones" },
-                          { pred: "index=main", match: "Searches that reference a specific index", use: "Route high-volume index searches to a low-weight pool" },
-                        ].map((row) => (
-                          <tr key={row.pred} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
-                            <td className="px-3 py-2 whitespace-nowrap"><span className="text-[11px] font-mono text-emerald-400">{row.pred}</span></td>
-                            <td className="px-3 py-2"><span className="text-[11px] text-gray-400">{row.match}</span></td>
-                            <td className="px-3 py-2"><span className="text-[11px] text-gray-500">{row.use}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-[10px] text-gray-600 mt-1.5">Multiple conditions can be combined with AND / OR: <span className="font-mono text-gray-500">search_time_range=alltime AND role!=admin</span></p>
-                </div>
-
-                {/* REST endpoints */}
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">REST API Reference</h3>
-                  <div className="rounded-lg border border-surface-border bg-surface/50 p-3 flex flex-col gap-1.5">
-                    {[
-                      { path: "GET /services/workloads/status", desc: "Full snapshot — enabled flag, all pools, all rules (used by this page)" },
-                      { path: "GET /services/workloads/config", desc: "WLM enabled/disabled flag only" },
-                      { path: "GET /services/workloads/pools", desc: "Pool definitions (name, weights, category)" },
-                      { path: "GET /services/workloads/rules", desc: "Placement rules (predicate → pool mapping)" },
-                      { path: "GET /services/workloads/admission-rules", desc: "Admission rules (predicate → action)" },
-                      { path: "POST /services/workloads/config", desc: "Enable or disable WLM (requires admin)" },
-                    ].map((r) => (
-                      <div key={r.path} className="flex items-start gap-3">
-                        <span className="text-[10px] font-mono text-blue-400/80 whitespace-nowrap shrink-0 pt-px">{r.path}</span>
-                        <ArrowRight size={10} className="text-gray-600 shrink-0 mt-[3px]" />
-                        <span className="text-[10px] text-gray-500">{r.desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            )}
-          </div>
-        </section>
 
       </div>
     </div>
