@@ -270,11 +270,11 @@ function generatePDFReport(rows: any[], serverName = "") {
   </style>
 </head>
 <body>
-  <h1>Inefficient Scheduled Searches</h1>
-  ${stackName ? `<div class="stack-name">${escapeHtml(stackName)}</div>` : ""}
+  <h1>Inefficient Scheduled Searches${stackName ? ` — ${escapeHtml(stackName)}` : ""}</h1>
+  ${stackName ? `<div class="stack-name">Splunk Cloud Stack: ${escapeHtml(stackName)}</div>` : ""}
   <div class="meta">
     ${serverName ? `<span class="server">${escapeHtml(serverName)}</span> &nbsp;·&nbsp; ` : ""}
-    Generated ${date} &nbsp;·&nbsp; searches with Duration / Freq &gt; 1.0x only
+    Generated ${date}
   </div>
   <div class="summary">
     <div class="stat"><div class="stat-val">${reportRows.length}</div><div class="stat-lbl">Inefficient searches</div></div>
@@ -301,7 +301,7 @@ function generatePDFReport(rows: any[], serverName = "") {
   }
 }
 
-function exportCSV(rows: any[]) {
+function exportCSV(rows: any[], serverName = "") {
   const exportRows = rows.filter((r) => !r._isNoIndex);
   if (!exportRows.length) return;
 
@@ -310,8 +310,19 @@ function exportCSV(rows: any[]) {
     return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
   }
 
+  const stackName = extractStackName(serverName);
+  const date = new Date().toISOString().slice(0, 10);
+  const metaLines = [
+    `"Inefficient Scheduled Searches"`,
+    stackName ? `"Splunk Cloud Stack: ${stackName}"` : "",
+    serverName ? `"Server: ${serverName}"` : "",
+    `"Generated: ${new Date().toLocaleString()}"`,
+    "",
+  ].filter((l) => l !== undefined);
+
   const headers = ["Search Name", "Cron", "Earliest", "Latest", "App", "User", "Sharing", "Duration/Freq", "Search SPL"];
   const csvLines = [
+    ...metaLines,
     headers.join(","),
     ...exportRows.map((r) => {
       const eff = r._efficiency;
@@ -336,7 +347,7 @@ function exportCSV(rows: any[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `scheduled-searches-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `scheduled-searches-${stackName || "export"}-${date}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -727,8 +738,6 @@ export function ScheduledSearchesPage() {
     }
   }
 
-  const lowerFilter = filter.toLowerCase();
-
   // Compute efficiency for all rows using run_time (preferred) or time window (fallback)
   const rowsWithEfficiency = useMemo(() => {
     return results.map((r) => {
@@ -755,8 +764,8 @@ export function ScheduledSearchesPage() {
   const availableApps = useMemo(() => [...new Set(rowsWithEfficiency.map((r) => r["eai:acl.app"] || "").filter(Boolean))].sort(), [rowsWithEfficiency]);
   const availableUsers = useMemo(() => [...new Set(rowsWithEfficiency.map((r) => r["eai:acl.owner"] || "").filter(Boolean))].sort(), [rowsWithEfficiency]);
 
-  const filtered = rowsWithEfficiency.filter((r) => {
-    const matchesText = !filter || Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(lowerFilter));
+  const filtered = useMemo(() => rowsWithEfficiency.filter((r) => {
+    const matchesText = !filter || Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(filter.toLowerCase()));
     if (!matchesText) return false;
     if (filterApps.size > 0 && !filterApps.has(r["eai:acl.app"] || "")) return false;
     if (filterUsers.size > 0 && !filterUsers.has(r["eai:acl.owner"] || "")) return false;
@@ -767,7 +776,7 @@ export function ScheduledSearchesPage() {
       return (r._efficiency.ratio ?? 0) > 1.0;
     }
     return true;
-  });
+  }), [rowsWithEfficiency, filter, filterApps, filterUsers, excludeApps, showEfficiency]);
 
   function handleSort(key: string) {
     if (sortCol === key) {
@@ -1073,7 +1082,7 @@ export function ScheduledSearchesPage() {
                 PDF
               </button>
               <button
-                onClick={() => exportCSV(filtered)}
+                onClick={() => exportCSV(filtered, splunkServerName)}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
               >
                 <FileDown size={12} />
