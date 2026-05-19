@@ -27,6 +27,14 @@ interface WorkloadRule {
   disabled: boolean;
 }
 
+interface AdmissionRule {
+  name: string;
+  predicate: string;
+  action: string;
+  order: number;
+  disabled: boolean;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseBool(val: unknown): boolean {
@@ -138,26 +146,29 @@ export function WorkloadPage() {
   const [config, setConfig] = useState<WorkloadConfig | null>(null);
   const [pools, setPools] = useState<WorkloadPool[]>([]);
   const [rules, setRules] = useState<WorkloadRule[]>([]);
+  const [admissionRules, setAdmissionRules] = useState<AdmissionRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rawRulesData, setRawRulesData] = useState<any>(null);
+  const [rawDebug, setRawDebug] = useState<Record<string, any>>({});
   const [showRaw, setShowRaw] = useState(false);
 
   async function fetchAll() {
     setLoading(true);
     setError(null);
     try {
-      const [cfgRes, poolsRes, rulesRes] = await Promise.all([
+      const [cfgRes, poolsRes, rulesRes, admissionRes] = await Promise.all([
         api.proxy("workloads/config?count=0"),
         api.proxy("workloads/pools?count=0"),
         api.proxy("workloads/rules?count=0"),
+        api.proxy("workloads/admission-rules?count=0"),
       ]);
 
-      setRawRulesData(rulesRes);
+      setRawDebug({ rules: rulesRes, admissionRules: admissionRes });
 
       if (cfgRes.status === "error") throw new Error(cfgRes.message || "Failed to fetch workload config");
       if (poolsRes.status === "error") throw new Error(poolsRes.message || "Failed to fetch workload pools");
       if (rulesRes.status === "error") throw new Error(rulesRes.message || "Failed to fetch workload rules");
+      // admission-rules failure is non-fatal — some instances may not have it
 
       // Config
       const cfgEntry = cfgRes.data?.entry?.[0]?.content ?? {};
@@ -176,7 +187,7 @@ export function WorkloadPage() {
       });
       setPools(rawPools);
 
-      // Rules — sorted by order ascending
+      // Placement rules — sorted by order ascending
       const rawRules: WorkloadRule[] = (rulesRes.data?.entry ?? [])
         .map((e: any) => {
           const c = e.content ?? {};
@@ -190,6 +201,23 @@ export function WorkloadPage() {
         })
         .sort((a: WorkloadRule, b: WorkloadRule) => a.order - b.order);
       setRules(rawRules);
+
+      // Admission rules
+      if (admissionRes.status === "ok") {
+        const rawAdmission: AdmissionRule[] = (admissionRes.data?.entry ?? [])
+          .map((e: any) => {
+            const c = e.content ?? {};
+            return {
+              name: e.name ?? "",
+              predicate: c.predicate ?? "",
+              action: c.action ?? "",
+              order: parseNum(c.order, 0),
+              disabled: parseBool(c.disabled),
+            };
+          })
+          .sort((a: AdmissionRule, b: AdmissionRule) => a.order - b.order);
+        setAdmissionRules(rawAdmission);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -201,7 +229,8 @@ export function WorkloadPage() {
 
   // Derived
   const activeRules = rules.filter((r) => !r.disabled);
-  const notConfigured = !loading && !error && pools.length === 0 && rules.length === 0;
+  const activeAdmissionRules = admissionRules.filter((r) => !r.disabled);
+  const notConfigured = !loading && !error && pools.length === 0 && rules.length === 0 && admissionRules.length === 0;
 
   // Build pool-name → category map for rule table pills
   const poolCategoryMap = Object.fromEntries(pools.map((p) => [p.name, p.category]));
@@ -260,10 +289,14 @@ export function WorkloadPage() {
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-400">
                 <span className="font-semibold text-white">{rules.length}</span>
-                <span>rules</span>
+                <span>placement rules</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-400">
-                <span className="font-semibold text-emerald-400">{activeRules.length}</span>
+                <span className="font-semibold text-violet-400">{admissionRules.length}</span>
+                <span>admission rules</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-400">
+                <span className="font-semibold text-emerald-400">{activeRules.length + activeAdmissionRules.length}</span>
                 <span>active</span>
               </div>
 
@@ -286,12 +319,12 @@ export function WorkloadPage() {
                 onClick={() => setShowRaw((v) => !v)}
                 className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
               >
-                <span className="font-medium">Raw API Response (workloads/rules)</span>
+                <span className="font-medium">Raw API Response (workloads/rules + workloads/admission-rules)</span>
                 <span className="text-[10px] text-gray-600">{showRaw ? "▲ hide" : "▼ show"}</span>
               </button>
               {showRaw && (
-                <pre className="px-4 pb-4 text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all overflow-auto max-h-64 border-t border-surface-border">
-                  {JSON.stringify(rawRulesData, null, 2)}
+                <pre className="px-4 pb-4 text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all overflow-auto max-h-96 border-t border-surface-border">
+                  {JSON.stringify(rawDebug, null, 2)}
                 </pre>
               )}
             </div>
@@ -424,6 +457,83 @@ export function WorkloadPage() {
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* ── Admission Rules section ── */}
+            {admissionRules.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-white">Admission Rules</h2>
+                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 border border-violet-500/20 text-violet-400">
+                    {admissionRules.length}
+                  </span>
+                  <span className="text-[10px] text-gray-500">Controls which searches are admitted to run</span>
+                </div>
+
+                <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+                  <div className="overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-surface-border">
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap w-12">Order</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Rule Name</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Predicate / Condition</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Action</th>
+                          <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {admissionRules.map((rule) => (
+                          <tr
+                            key={rule.name}
+                            className={clsx(
+                              "border-b border-surface-border/50 hover:bg-surface-hover transition-colors",
+                              rule.disabled && "opacity-50"
+                            )}
+                          >
+                            <td className="px-3 py-2">
+                              <span className="text-xs font-mono text-gray-500">{rule.order}</span>
+                            </td>
+                            <td className="px-3 py-2 max-w-[200px]">
+                              <span className="text-xs font-mono text-gray-300 truncate block" title={rule.name}>
+                                {rule.name}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 max-w-[320px]">
+                              <span className="text-xs font-mono text-gray-400 truncate block" title={rule.predicate}>
+                                {rule.predicate || <span className="text-gray-600 italic">—</span>}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {rule.action ? (
+                                <span className={clsx(
+                                  "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                  rule.action.toLowerCase().includes("reject") || rule.action.toLowerCase().includes("block")
+                                    ? "bg-red-500/15 text-red-400 border border-red-500/25"
+                                    : rule.action.toLowerCase().includes("throttle")
+                                    ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                    : "bg-gray-500/15 text-gray-400 border border-gray-500/25"
+                                )}>
+                                  {rule.action}
+                                </span>
+                              ) : (
+                                <span className="text-gray-600 text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {rule.disabled ? (
+                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-gray-500/15 text-gray-400 border border-gray-500/30">Disabled</span>
+                              ) : (
+                                <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Enabled</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>

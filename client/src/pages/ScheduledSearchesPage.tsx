@@ -682,18 +682,26 @@ export function ScheduledSearchesPage() {
       })
       .catch(() => {});
 
-    api.proxy("workloads/rules?count=0")
-      .then((res) => {
-        if (res.status !== "ok") return;
-        const match = (res.data?.entry ?? []).find((e: any) => {
-          const predicate: string = e.content?.predicate ?? "";
-          const d = e.content?.disabled;
-          const disabled = d === "1" || d === true || d === 1;
-          return !disabled && /search_time_range\s*=\s*alltime/i.test(predicate);
-        });
-        setWlmAllTimeRule(match ? match.name : null);
-      })
-      .catch(() => {});
+    // Check both admission-rules (primary) and placement rules for alltime predicate
+    Promise.allSettled([
+      api.proxy("workloads/admission-rules?count=0"),
+      api.proxy("workloads/rules?count=0"),
+    ]).then(([admissionResult, placementResult]) => {
+      const allEntries: any[] = [];
+      if (admissionResult.status === "fulfilled" && admissionResult.value.status === "ok") {
+        allEntries.push(...(admissionResult.value.data?.entry ?? []));
+      }
+      if (placementResult.status === "fulfilled" && placementResult.value.status === "ok") {
+        allEntries.push(...(placementResult.value.data?.entry ?? []));
+      }
+      const match = allEntries.find((e: any) => {
+        const predicate: string = e.content?.predicate ?? "";
+        const d = e.content?.disabled;
+        const disabled = d === "1" || d === true || d === 1;
+        return !disabled && /search_time_range\s*=\s*alltime/i.test(predicate);
+      });
+      setWlmAllTimeRule(match ? match.name : null);
+    });
   }, []);
 
   function toggleDisabled() {
