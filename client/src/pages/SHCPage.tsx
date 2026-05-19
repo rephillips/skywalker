@@ -344,32 +344,11 @@ function ConcurrencyPanel() {
 
   const num = (k: string) => Number(content?.[k] ?? 0);
 
-  // Derive computed values from raw fields
-  const maxPerCpu      = num("max_searches_per_cpu");
-  const baseMax        = num("base_max_searches");
-  const maxHist        = num("max_hist_searches");                    // per-node total
-  const clusterTotal   = num("cluster_wide_max_hist_searches") || maxHist;
-  const members        = maxHist > 0 ? Math.round(clusterTotal / maxHist) : 1;
-  const cpus           = maxPerCpu > 0 ? Math.round((maxHist - baseMax) / maxPerCpu) : 0;
-
-  // When captain_is_adhoc_searchhead=false the captain is dedicated to coordination
-  // only and does not run searches — effective search pool is (members - 1)
-  const searchMembers  = captainIsAdhoc === false ? members - 1 : members;
-
-  // max_searches_perc comes back as a decimal (0.5) from the REST API
-  const rawPerc        = num("max_searches_perc");
-  const schedPerc      = rawPerc > 1 ? rawPerc / 100 : rawPerc;
-  const rawAutoPerc    = num("auto_summary_perc");
-  const autoPerc       = rawAutoPerc > 1 ? rawAutoPerc / 100 : rawAutoPerc;
-
-  const perNodeSched   = Math.floor(maxHist * schedPerc);
-  const clusterSched   = perNodeSched * searchMembers;
-  const perNodeAuto    = Math.floor(perNodeSched * autoPerc);
-  const clusterAuto    = perNodeAuto * searchMembers;
-
-  const schedPct       = Math.round(schedPerc * 100);
-  const autoPct        = Math.round(autoPerc * 100);
-  const effectiveTotal = maxHist * searchMembers;
+  // Only what the usage bars need
+  const maxHist      = num("max_hist_searches");
+  const rawPerc      = num("max_searches_perc");
+  const schedPerc    = rawPerc > 1 ? rawPerc / 100 : rawPerc;
+  const perNodeSched = Math.floor(maxHist * schedPerc);
 
   return (
     <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised">
@@ -377,7 +356,7 @@ function ConcurrencyPanel() {
         <div className="flex items-center gap-2">
           <Gauge size={14} className="text-cyan-400" />
           <h3 className="text-xs font-semibold text-white">Search Head Cluster Concurrency Limits</h3>
-          <span className="text-[10px] text-gray-500">search-concurrency?cluster_wide_quota=1 + conf-limits · click cards to see formula</span>
+          <span className="text-[10px] text-gray-500">search-concurrency?cluster_wide_quota=1 · flip cards for details</span>
           {captainIsAdhoc !== null && (
             <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${captainIsAdhoc ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
               {captainIsAdhoc ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
@@ -408,120 +387,63 @@ function ConcurrencyPanel() {
 
       {!error && content && (
         <>
-          {/* Flip cards — quota limits */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 border-b border-surface-border">
-            <FlipCard
-              front={
-                <CardFront
-                  title="Cluster Total Slots"
-                  value={effectiveTotal}
-                  subtitle={captainIsAdhoc === false
-                    ? `${searchMembers} of ${members} members run searches (captain dedicated)`
-                    : `Adhoc + scheduled across ${members} member${members !== 1 ? "s" : ""}`}
-                  accent="text-cyan-300"
+          {/* Cluster-wide quota flip cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 p-4 border-b border-surface-border">
+            {[
+              {
+                key: "max_hist_searches",
+                title: "Max Historical",
+                subtitle: "Total concurrent historical searches cluster-wide (adhoc + scheduled)",
+                description: "Hard ceiling on all historical searches running simultaneously across the cluster. Adhoc and scheduled searches both count against this limit.",
+              },
+              {
+                key: "max_hist_scheduled_searches",
+                title: "Max Hist Scheduled",
+                subtitle: "Scheduled historical searches allowed cluster-wide",
+                description: "Subset of max_hist_searches reserved for scheduled jobs. Prevents scheduled searches from consuming all historical slots.",
+              },
+              {
+                key: "max_auto_summary_searches",
+                title: "Max Auto-Summary",
+                subtitle: "Report acceleration & data model acceleration slots",
+                description: "Slots reserved for summary-building searches — report acceleration and data model acceleration. Subset of scheduled historical slots.",
+              },
+              {
+                key: "max_rt_searches",
+                title: "Max Real-Time",
+                subtitle: "Total concurrent real-time searches cluster-wide",
+                description: "Hard ceiling on all real-time searches running simultaneously across the cluster. RT searches hold open persistent tailing jobs.",
+              },
+              {
+                key: "max_rt_scheduled_searches",
+                title: "Max RT Scheduled",
+                subtitle: "Scheduled real-time searches allowed cluster-wide",
+                description: "Subset of max_rt_searches reserved for scheduled real-time jobs, keeping ad-hoc RT slots available.",
+              },
+            ].map(({ key, title, subtitle, description }) => {
+              const val = num(key);
+              return (
+                <FlipCard
+                  key={key}
+                  front={
+                    <CardFront
+                      title={title}
+                      value={val || "—"}
+                      subtitle={subtitle}
+                      accent="text-emerald-300"
+                    />
+                  }
+                  back={
+                    <CardBack
+                      title={title}
+                      formula={key}
+                      substituted={val ? `= ${val.toLocaleString()}` : "no data"}
+                      description={description}
+                    />
+                  }
                 />
-              }
-              back={
-                <CardBack
-                  title="Cluster Total Slots"
-                  formula={captainIsAdhoc === false
-                    ? `(max_searches_per_cpu × CPUs\n + base_max_searches)\n × (members − 1)`
-                    : `(max_searches_per_cpu × CPUs\n + base_max_searches) × members`}
-                  substituted={captainIsAdhoc === false
-                    ? `(${maxPerCpu} × ${cpus} + ${baseMax}) × (${members}−1) = ${effectiveTotal}`
-                    : `(${maxPerCpu} × ${cpus} + ${baseMax}) × ${members} = ${effectiveTotal}`}
-                  description={captainIsAdhoc === false
-                    ? "Captain is dedicated — excluded from search pool (captain_is_adhoc_searchhead=false)"
-                    : "Total concurrent searches (adhoc + scheduled) across the deployment"}
-                />
-              }
-            />
-            <FlipCard
-              front={
-                <CardFront
-                  title="Cluster Scheduled"
-                  value={clusterSched}
-                  subtitle={`${schedPct}% of cluster total, ${perNodeSched} per node`}
-                  accent="text-violet-300"
-                />
-              }
-              back={
-                <CardBack
-                  title="Cluster Scheduled"
-                  formula={`⌊(max_searches_per_cpu × CPUs\n + base_max_searches)\n × max_searches_perc⌋ × search_members`}
-                  substituted={`⌊(${maxPerCpu}×${cpus}+${baseMax}) × ${schedPct}%⌋ × ${searchMembers} = ${clusterSched}`}
-                  description="Max scheduled searches distributed across search-eligible members"
-                />
-              }
-            />
-            <FlipCard
-              front={
-                <CardFront
-                  title="Cluster Auto-Summary"
-                  value={clusterAuto}
-                  subtitle={`${autoPct}% of scheduled, ${perNodeAuto} per node`}
-                  accent="text-amber-300"
-                />
-              }
-              back={
-                <CardBack
-                  title="Cluster Auto-Summary"
-                  formula={`⌊(scheduled_per_node\n × auto_summary_perc)⌋ × search_members`}
-                  substituted={`⌊${perNodeSched} × ${autoPct}%⌋ × ${searchMembers} = ${clusterAuto}`}
-                  description="Slots reserved for report acceleration & data model acceleration"
-                />
-              }
-            />
-            <FlipCard
-              front={
-                <CardFront
-                  title="Per-Node Total"
-                  value={maxHist}
-                  subtitle={`${cpus} CPUs × ${maxPerCpu} + ${baseMax} base`}
-                  accent="text-emerald-300"
-                />
-              }
-              back={
-                <CardBack
-                  title="Per-Node Total"
-                  formula={`max_searches_per_cpu × CPUs\n+ base_max_searches`}
-                  substituted={`${maxPerCpu} × ${cpus} + ${baseMax} = ${maxHist}`}
-                  description="Max concurrent searches on a single search head member"
-                />
-              }
-            />
-          </div>
-
-          {/* Cluster-wide limits table */}
-          <div className="px-4 py-3 border-b border-surface-border">
-            <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-2">Cluster-Wide Quota Limits</div>
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="border-b border-surface-border">
-                  <th className="text-left py-1.5 pr-4 text-[9px] font-medium uppercase tracking-wide text-gray-500">Limit</th>
-                  <th className="text-right py-1.5 text-[9px] font-medium uppercase tracking-wide text-gray-500">Value</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-border/30">
-                {[
-                  { key: "max_hist_searches",           label: "max_hist_searches" },
-                  { key: "max_hist_scheduled_searches", label: "max_hist_scheduled_searches" },
-                  { key: "max_auto_summary_searches",   label: "max_auto_summary_searches" },
-                  { key: "max_rt_searches",             label: "max_rt_searches" },
-                  { key: "max_rt_scheduled_searches",   label: "max_rt_scheduled_searches" },
-                ].map(({ key, label }) => {
-                  const val = content?.[key];
-                  return (
-                    <tr key={key}>
-                      <td className="py-1.5 pr-4 font-mono text-gray-400">{label}</td>
-                      <td className="py-1.5 text-right font-mono font-semibold text-cyan-300">
-                        {val !== undefined && val !== "" ? Number(val).toLocaleString() : <span className="text-gray-600">—</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              );
+            })}
           </div>
 
           {/* Active usage bars */}
