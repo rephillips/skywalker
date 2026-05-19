@@ -94,6 +94,23 @@ function analyzeEfficiency(runTimeSec: number | null, timeWindowSec: number | nu
   return { valueSec: val, cronIntervalSec: ci, ratio, status: "critical", message: `${label} ${suffix} — Heavy overlap`, source };
 }
 
+/** Flag searches with no lower time bound (earliest=0 or unset) — scans all historical data */
+function isAllTimeSearch(earliest: string, latest: string): boolean {
+  const e = (earliest || "").trim();
+  const l = (latest || "").trim();
+  // earliest="0" is epoch start; empty means no bound configured
+  // latest empty/"0" alongside empty earliest also indicates all-time
+  return e === "0" || e === "" || (e === "0" && (l === "0" || l === ""));
+}
+
+/** Flag searches whose SPL only uses non-index generating commands */
+function isNoIndexSearch(spl: string): boolean {
+  if (!spl) return false;
+  // Strip leading whitespace; if the first command is | rest or | inputlookup
+  // the search never touches an index
+  return /^\s*\|\s*(rest|inputlookup)\b/i.test(spl);
+}
+
 /** Detect inline earliest=/latest= in SPL that override dispatch times */
 function detectInlineTimeOverrides(spl: string): { earliest?: string; latest?: string } | null {
   if (!spl) return null;
@@ -532,6 +549,8 @@ export function ScheduledSearchesPage() {
         _inlineOverrides: inlineOverrides,
         _effectiveEarliest: effectiveEarliest,
         _efficiency: analyzeEfficiency(rt, tw, r["cron_schedule"] || ""),
+        _isAllTime: isAllTimeSearch(r["dispatch.earliest_time"] || "", r["dispatch.latest_time"] || ""),
+        _isNoIndex: isNoIndexSearch(r["search"] || ""),
       };
     });
   }, [results, runTimes]);
@@ -761,6 +780,27 @@ export function ScheduledSearchesPage() {
                         {columns.map((col) => {
                           const val = row[col.key] || "";
                           const overrides = row._inlineOverrides;
+
+                          // Title column — show all-time / no-index badges
+                          if (col.key === "title") {
+                            return (
+                              <td key={col.key} className="px-3 py-2 max-w-xs">
+                                <div className="text-xs font-mono text-gray-300 truncate" title={val}>{val || "—"}</div>
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {row._isAllTime && (
+                                    <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-orange-500/15 text-orange-400 border border-orange-500/25">
+                                      all-time
+                                    </span>
+                                  )}
+                                  {row._isNoIndex && (
+                                    <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-sky-500/15 text-sky-400 border border-sky-500/25">
+                                      no index
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          }
 
                           // Earliest column — show inline override warning
                           if (col.key === "dispatch.earliest_time") {
