@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import App from "./App";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SearchPage } from "./pages/SearchPage";
@@ -23,7 +23,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <App />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <Navigate to="/shc" replace /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/skipped", element: <SkippedSearchesPage /> },
       { path: "search/slow", element: <SlowSearchesPage /> },
