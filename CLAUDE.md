@@ -61,8 +61,18 @@ Browser → Vite proxy (/api/*) → Express :3001 → Splunk REST API (:8089)
 ### Adding a new page
 
 1. Create `client/src/pages/MyPage.tsx` — call `useSplunkSearch(spl)` for data
-2. Add a route in `client/src/App.tsx`
+2. Add a route in `client/src/main.tsx`
 3. Add a nav entry in `client/src/config/navigation.ts`
+
+### Data fetching rules
+
+**All Splunk API calls must live inside the page component that needs them — never in `App.tsx`, layout components, or any parent that is mounted for the lifetime of the app.**
+
+React Router mounts and unmounts page components as the user navigates. A `useEffect` or `useSplunkSearch` call inside a page component therefore only fires when the user is on that page. If a search is hoisted to a parent, it fires on every page load regardless of which route is active and can't be cancelled when the user navigates away.
+
+- Put `useSplunkSearch` / `api.search` / `api.proxy` calls directly in the page-level component (or in hooks called from it).
+- Never put Splunk calls in `App.tsx`, `TopBar`, sidebar, or any wrapper that renders across all routes.
+- For data that two sibling pages genuinely need to share, prefer re-fetching on each page over a shared parent fetch.
 
 ### Adding a new backend route
 
