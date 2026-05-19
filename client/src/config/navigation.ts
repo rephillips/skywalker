@@ -17,6 +17,7 @@ import {
   Snail,
   Network,
   Stethoscope,
+  Gauge,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ export const navigation: NavItem[] = [
       { label: "Ad-hoc Search", icon: Search, path: "/search" },
       { label: "Skipped Searches", icon: SkipForward, path: "/search/skipped" },
       { label: "Slow Searches", icon: Snail, path: "/search/slow" },
+      { label: "Workload Management", icon: Gauge, path: "/search/workload" },
     ],
   },
   {
