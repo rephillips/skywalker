@@ -294,7 +294,9 @@ export function WorkloadPage() {
                 <span>placement rules</span>
               </div>
               <div className="flex items-center gap-1 text-xs text-gray-400">
-                <span className="font-semibold text-violet-400">{admissionRules.length}</span>
+                <span className="font-semibold text-violet-400">
+                  {admCountLoading ? <Loader2 size={12} className="animate-spin inline" /> : (admCount ?? admissionRules.length)}
+                </span>
                 <span>admission rules</span>
               </div>
               <div className="ml-auto">
