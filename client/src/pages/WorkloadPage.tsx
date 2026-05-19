@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, RefreshCw, Layers, ToggleLeft, BookOpen, ChevronDown, ChevronRight, ArrowRight, Filter } from "lucide-react";
+import { Loader2, RefreshCw, Layers, ToggleLeft, BookOpen, ChevronDown, ChevronRight, ArrowRight, Filter, ShieldCheck } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -49,6 +49,9 @@ function WeightBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+const ADM_RULES_COUNT_SPL = `| rest /services/workloads/status splunk_server=local | search title=admission-control-status | table title search-filter-rules.AllTime.action search-filter-rules.AllTime.predicate search-filter-rules.AllTime.user_message | stats count`;
+const ADM_RULES_DETAIL_SPL = `| rest /services/workloads/status splunk_server=local | search title=admission-control-status | table title search-filter-rules.AllTime.action search-filter-rules.AllTime.predicate search-filter-rules.AllTime.user_message`;
+
 const WLM_HOST_FILTER = `((host=sh-* AND host=*.splunk*.*) OR (host=idx-* AND host=*.splunk*.*))`; // matches Splunk Cloud SH/IDX hostnames
 const WLM_COUNT_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats dc(search_name) as filtered_count`;
 const WLM_DETAIL_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats count by search_name prefilter_action prefilter_rule user app search_type`;
@@ -69,6 +72,15 @@ export function WorkloadPage() {
   const [error, setError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
+
+  // Admission rules (SPL-based)
+  const [admCount, setAdmCount] = useState<number | null>(null);
+  const [admCountLoading, setAdmCountLoading] = useState(false);
+  const [admCountError, setAdmCountError] = useState<string | null>(null);
+  const [showAdmDrilldown, setShowAdmDrilldown] = useState(false);
+  const [admDetails, setAdmDetails] = useState<any[]>([]);
+  const [admDetailsLoading, setAdmDetailsLoading] = useState(false);
+  const [admDetailsError, setAdmDetailsError] = useState<string | null>(null);
 
   // WLM live activity
   const [wlmEarliest, setWlmEarliest] = useState("-60m");
@@ -95,6 +107,33 @@ export function WorkloadPage() {
   }
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAdmCountLoading(true);
+    setAdmCountError(null);
+    api.search(ADM_RULES_COUNT_SPL)
+      .then((res) => {
+        if (cancelled) return;
+        const n = parseInt((res.results?.[0] as any)?.count ?? "0", 10);
+        setAdmCount(isNaN(n) ? 0 : n);
+      })
+      .catch((err) => { if (!cancelled) setAdmCountError((err as Error).message); })
+      .finally(() => { if (!cancelled) setAdmCountLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!showAdmDrilldown) return;
+    let cancelled = false;
+    setAdmDetailsLoading(true);
+    setAdmDetailsError(null);
+    api.search(ADM_RULES_DETAIL_SPL)
+      .then((res) => { if (!cancelled) setAdmDetails(res.results ?? []); })
+      .catch((err) => { if (!cancelled) setAdmDetailsError((err as Error).message); })
+      .finally(() => { if (!cancelled) setAdmDetailsLoading(false); });
+    return () => { cancelled = true; };
+  }, [showAdmDrilldown]);
 
   useEffect(() => {
     let cancelled = false;
@@ -435,6 +474,105 @@ export function WorkloadPage() {
             )}
           </>
         )}
+        {/* ── Admission Rules (SPL-based) ── */}
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck size={14} className="text-violet-400 shrink-0" />
+            <h2 className="text-sm font-semibold text-white">Admission Rules Configured</h2>
+          </div>
+
+          <button
+            onClick={() => setShowAdmDrilldown((v) => !v)}
+            className={clsx(
+              "w-full rounded-xl border bg-surface-raised p-5 flex items-center gap-5 hover:bg-surface-hover transition-colors text-left",
+              showAdmDrilldown ? "border-violet-500/40" : "border-surface-border"
+            )}
+            disabled={admCountLoading}
+          >
+            <div className="flex flex-col items-center justify-center w-24 shrink-0">
+              {admCountLoading ? (
+                <Loader2 size={24} className="animate-spin text-violet-400" />
+              ) : admCountError ? (
+                <span className="text-xs text-red-400 text-center">Error</span>
+              ) : (
+                <span className="text-4xl font-bold tabular-nums text-violet-400">
+                  {admCount ?? "—"}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-semibold text-gray-200">Admission rules active on this stack</span>
+              <span className="text-xs text-gray-500">
+                via <span className="font-mono">workloads/status</span> · click to {showAdmDrilldown ? "collapse" : "expand"} detail
+              </span>
+              {admCountError && <span className="text-xs text-red-400 mt-1">{admCountError}</span>}
+            </div>
+            <div className="ml-auto shrink-0">
+              {showAdmDrilldown ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+            </div>
+          </button>
+
+          {showAdmDrilldown && (
+            <div className="mt-3 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+              {admDetailsLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 size={16} className="animate-spin text-brand-400" />
+                </div>
+              ) : admDetailsError ? (
+                <div className="p-5 text-xs text-red-400">{admDetailsError}</div>
+              ) : admDetails.length === 0 ? (
+                <div className="p-5 text-xs text-gray-500 text-center">No admission rules found.</div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-surface-border">
+                        <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Title</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Predicate</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">Action</th>
+                        <th className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">User Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {admDetails.map((row, i) => {
+                        const action: string = (row as any)["search-filter-rules.AllTime.action"] ?? "";
+                        return (
+                          <tr key={i} className="border-b border-surface-border/50 hover:bg-surface-hover transition-colors">
+                            <td className="px-3 py-2">
+                              <span className="text-xs font-mono text-gray-300">{(row as any).title || "—"}</span>
+                            </td>
+                            <td className="px-3 py-2 max-w-[280px]">
+                              <span className="text-xs font-mono text-emerald-400 truncate block" title={(row as any)["search-filter-rules.AllTime.predicate"]}>
+                                {(row as any)["search-filter-rules.AllTime.predicate"] || "—"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {action ? (
+                                <span className={clsx("rounded px-1.5 py-0.5 text-[10px] font-medium",
+                                  /reject|block/i.test(action) ? "bg-red-500/15 text-red-400 border border-red-500/25"
+                                  : /throttle/i.test(action) ? "bg-amber-500/15 text-amber-400 border border-amber-500/25"
+                                  : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                                )}>
+                                  {action}
+                                </span>
+                              ) : <span className="text-gray-600 text-xs">—</span>}
+                            </td>
+                            <td className="px-3 py-2 max-w-[240px]">
+                              <span className="text-xs text-gray-400 truncate block" title={(row as any)["search-filter-rules.AllTime.user_message"]}>
+                                {(row as any)["search-filter-rules.AllTime.user_message"] || "—"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* ── WLM Live Activity ── */}
         <section>
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
