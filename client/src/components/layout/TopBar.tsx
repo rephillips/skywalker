@@ -5,9 +5,10 @@ import { useGlobalTime, TIME_PRESETS } from "../../hooks/useGlobalTime";
 
 interface Props {
   title: string;
+  hideTimePicker?: boolean;
 }
 
-export function TopBar({ title }: Props) {
+export function TopBar({ title, hideTimePicker = false }: Props) {
   const { theme, toggle } = useTheme();
   const { label, setTime } = useGlobalTime();
   const [connection, setConnection] = useState<{ connected: boolean; host: string }>({ connected: false, host: "" });
@@ -58,7 +59,7 @@ export function TopBar({ title }: Props) {
         </div>
 
         {/* Global time picker */}
-        <div className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5">
+        {!hideTimePicker && <div className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5">
           <Clock size={13} className="text-gray-500" />
           <select
             value={label}
@@ -74,7 +75,7 @@ export function TopBar({ title }: Props) {
               </option>
             ))}
           </select>
-        </div>
+        </div>}
         <button
           onClick={toggle}
           className="flex items-center justify-center rounded-lg p-2 text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors"

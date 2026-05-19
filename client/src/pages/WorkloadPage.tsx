@@ -262,7 +262,7 @@ export function WorkloadPage() {
 
   return (
     <div className="flex-1 flex flex-col">
-      <TopBar title="Workload Management" />
+      <TopBar title="Workload Management" hideTimePicker />
 
       <div className="p-6 flex flex-col gap-6">
         {/* ── Knowledge Card ── */}
