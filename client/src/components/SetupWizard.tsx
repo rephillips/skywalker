@@ -1,6 +1,56 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Loader2, Plug, Shield, Zap } from "lucide-react";
 
+function playLightsaberSwoosh() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const dur = 0.75;
+
+    // Sawtooth tone — sweeps up then settles (the hum + ignite)
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(720, now + 0.18);
+    osc.frequency.exponentialRampToValueAtTime(340, now + dur);
+    oscGain.gain.setValueAtTime(0, now);
+    oscGain.gain.linearRampToValueAtTime(0.28, now + 0.04);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(oscGain);
+    oscGain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + dur);
+
+    // Noise layer — bandpass-filtered whoosh
+    const bufLen = Math.ceil(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(600, now);
+    filter.frequency.exponentialRampToValueAtTime(2400, now + 0.2);
+    filter.frequency.exponentialRampToValueAtTime(500, now + dur);
+    filter.Q.value = 1.8;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0, now);
+    noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.05);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + dur);
+
+    setTimeout(() => ctx.close(), (dur + 0.1) * 1000);
+  } catch {
+    // Web Audio API unavailable — silently skip
+  }
+}
+
 type WizardState = "checking" | "form" | "success";
 
 export function SetupWizard({ onConnected }: { onConnected: () => void }) {
@@ -25,6 +75,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
         if (test.status === "ok") {
           setSuccessMsg(`Connected to ${test.serverName || cfg.baseUrl}`);
           setWizState("success");
+          playLightsaberSwoosh();
           setTimeout(() => onConnected(), 1000);
         } else {
           setWizState("form");
@@ -50,6 +101,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
       if (data.status === "ok" || data.status === "warning") {
         setSuccessMsg(data.message || "Connected");
         setWizState("success");
+        playLightsaberSwoosh();
         window.dispatchEvent(new Event("skywalker-connection-changed"));
         setTimeout(() => onConnected(), 900);
       } else {
