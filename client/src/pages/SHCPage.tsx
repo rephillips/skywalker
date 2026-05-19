@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Network, RefreshCw, Loader2, SearchCode, Crown, CheckCircle2, XCircle, AlertTriangle, Gauge } from "lucide-react";
+import { Network, RefreshCw, Loader2, SearchCode, Crown, CheckCircle2, AlertTriangle, Gauge } from "lucide-react";
 import { LineChart } from "@tremor/react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -19,15 +19,6 @@ function formatDurationSince(epochSecs: number): string {
   return `${m}m`;
 }
 
-function FlagPill({ on, label, invert }: { on: boolean; label: string; invert?: boolean }) {
-  const good = invert ? !on : on;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${good ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"}`}>
-      {good ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
-      {label}
-    </span>
-  );
-}
 
 function ClusterStatusPanel() {
   const [captain, setCaptain] = useState<any>(null);
@@ -113,11 +104,6 @@ function ClusterStatusPanel() {
   useEffect(() => { load(); }, [load]);
 
   const captainLabel = captain?._resolvedLabel || "unknown";
-  const electedSecs = Number(captain?.elected_captain || 0);
-  const dynamic = captain?.dynamic_captain === "1" || captain?.dynamic_captain === true;
-  const serviceReady = captain?.service_ready_flag === "1" || captain?.service_ready_flag === true;
-  const rollingRestart = captain?.rolling_restart_flag === "1" || captain?.rolling_restart_flag === true;
-  const initialized = captain?.initialized_flag === "1" || captain?.initialized_flag === true;
 
   return (
     <div className="mb-6 rounded-xl border border-surface-border bg-surface-raised">
@@ -162,27 +148,14 @@ function ClusterStatusPanel() {
       {!error && captain && (
         <>
           {/* Captain summary */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 px-4 py-3 border-b border-surface-border">
+          <div className="grid grid-cols-2 gap-4 px-4 py-3 border-b border-surface-border">
             <div>
               <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">Captain</div>
               <div className="text-sm font-semibold text-amber-300 truncate" title={captainLabel}>{captainLabel}</div>
             </div>
             <div>
-              <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">Elected</div>
-              <div className="text-sm text-gray-200">{formatDurationSince(electedSecs)} ago</div>
-            </div>
-            <div>
               <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">Members</div>
               <div className="text-sm text-gray-200">{members.length}</div>
-            </div>
-            <div>
-              <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">Mode</div>
-              <div className="text-sm text-gray-200">{dynamic ? "Dynamic" : "Static"}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <FlagPill on={serviceReady} label="Service ready" />
-              <FlagPill on={initialized} label="Initialized" />
-              <FlagPill on={rollingRestart} label="Rolling restart" invert />
             </div>
           </div>
 
