@@ -1220,7 +1220,7 @@ export function ScheduledSearchesPage() {
                                     <span className="text-[10px] font-medium text-red-400">All-Time Search</span>
                                     {wlmAllTimeRule && (
                                       <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-400 border border-violet-500/25 whitespace-nowrap" title={`WLM Admission Rule: ${wlmAllTimeRule}`}>
-                                        WLM Admission Rule Active
+                                        Blocked by WLM Admission Rule
                                       </span>
                                     )}
                                   </div>
