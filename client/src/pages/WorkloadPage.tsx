@@ -51,7 +51,7 @@ function WeightBar({ label, value }: { label: string; value: number }) {
 
 const WLM_HOST_FILTER = `((host=sh-* AND host=*.splunk*.*) OR (host=idx-* AND host=*.splunk*.*))`; // matches Splunk Cloud SH/IDX hostnames
 const WLM_COUNT_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats dc(search_name) as filtered_count`;
-const WLM_DETAIL_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats count by host prefilter_action prefilter_rule search_name user app search_type`;
+const WLM_DETAIL_SPL = `index=_internal sourcetype=wlm_* ${WLM_HOST_FILTER} prefilter_action=filter | stats count by search_name prefilter_action prefilter_rule user app search_type`;
 
 const TIME_OPTIONS = [
   { label: "Last 15 min", value: "-15m" },
@@ -507,7 +507,7 @@ export function WorkloadPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-border">
-                        {["Search Name", "App", "User", "Search Type", "Prefilter Rule", "Action", "Host", "Count"].map((h) => (
+                        {["Search Name", "App", "User", "Search Type", "Prefilter Rule", "Action", "Count"].map((h) => (
                           <th key={h} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -536,7 +536,6 @@ export function WorkloadPage() {
                               {(row as any).prefilter_action || "filter"}
                             </span>
                           </td>
-                          <td className="px-3 py-2"><span className="text-xs font-mono text-gray-500">{(row as any).host || "—"}</span></td>
                           <td className="px-3 py-2 text-right"><span className="text-xs font-mono text-gray-300">{(row as any).count}</span></td>
                         </tr>
                       ))}
