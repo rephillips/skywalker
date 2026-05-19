@@ -805,7 +805,6 @@ export function ScheduledSearchesPage() {
     { key: "eai:acl.owner", label: "User" },
     { key: "eai:acl.sharing", label: "Sharing" },
     { key: "next_scheduled_time", label: "Next Run" },
-    { key: "actions", label: "Actions" },
   ];
 
   if (showDisabled) {
@@ -1158,7 +1157,7 @@ export function ScheduledSearchesPage() {
                                   </div>
                                 </>
                               )}
-                              {!row._isAllTime && (eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
+                              {(row._isAllTime || eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); startFix(i, row); }}
                                   className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
