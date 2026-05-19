@@ -403,8 +403,8 @@ function ConcurrencyPanel() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
         <div className="flex items-center gap-2">
           <Gauge size={14} className="text-cyan-400" />
-          <h3 className="text-xs font-semibold text-white">Search Concurrency Limits</h3>
-          <span className="text-[10px] text-gray-500">search-concurrency + conf-limits/search + conf-limits/scheduler · click cards to see formula</span>
+          <h3 className="text-xs font-semibold text-white">Search Head Cluster Concurrency Limits</h3>
+          <span className="text-[10px] text-gray-500">search-concurrency?cluster_wide_quota=1 + conf-limits · click cards to see formula</span>
           {captainIsAdhoc !== null && (
             <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${captainIsAdhoc ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"}`}>
               {captainIsAdhoc ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />}
@@ -517,6 +517,38 @@ function ConcurrencyPanel() {
                 />
               }
             />
+          </div>
+
+          {/* Cluster-wide limits table */}
+          <div className="px-4 py-3 border-b border-surface-border">
+            <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-2">Cluster-Wide Quota Limits</div>
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="border-b border-surface-border">
+                  <th className="text-left py-1.5 pr-4 text-[9px] font-medium uppercase tracking-wide text-gray-500">Limit</th>
+                  <th className="text-right py-1.5 text-[9px] font-medium uppercase tracking-wide text-gray-500">Value</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-border/30">
+                {[
+                  { key: "max_hist_searches",           label: "max_hist_searches" },
+                  { key: "max_hist_scheduled_searches", label: "max_hist_scheduled_searches" },
+                  { key: "max_auto_summary_searches",   label: "max_auto_summary_searches" },
+                  { key: "max_rt_searches",             label: "max_rt_searches" },
+                  { key: "max_rt_scheduled_searches",   label: "max_rt_scheduled_searches" },
+                ].map(({ key, label }) => {
+                  const val = content?.[key];
+                  return (
+                    <tr key={key}>
+                      <td className="py-1.5 pr-4 font-mono text-gray-400">{label}</td>
+                      <td className="py-1.5 text-right font-mono font-semibold text-cyan-300">
+                        {val !== undefined && val !== "" ? Number(val).toLocaleString() : <span className="text-gray-600">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {/* Active usage bars */}
