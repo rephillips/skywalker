@@ -1156,7 +1156,7 @@ export function ScheduledSearchesPage() {
             </button>
 
             {showEmailCard && (() => {
-              const stackShort = splunkServerName ? splunkServerName.replace(/^https?:\/\//, "").split(".")[0] : "";
+              const stackShort = extractStackName(splunkServerName);
               const subject = stackShort
                 ? `Splunk Scheduled Search Efficiency Review — Stack: ${stackShort}`
                 : `Splunk Scheduled Search Efficiency Review`;
