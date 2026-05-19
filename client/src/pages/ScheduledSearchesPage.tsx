@@ -194,26 +194,34 @@ function extractStackName(fqdn: string): string {
 }
 
 function generatePDFReport(rows: any[], serverName = "") {
-  const inefficient = rows.filter((r) => (r._efficiency?.ratio ?? 0) > 1.0 || r._isAllTime);
-  if (!inefficient.length) return;
+  // rows are already pre-filtered by the caller (honors excludeApps, filterApps, filterUsers)
+  // only exclude rest-api/inputlookup searches which are never meaningful for this report
+  const reportRows = rows.filter((r) => !r._isNoIndex);
+  if (!reportRows.length) return;
 
   const stackName = extractStackName(serverName);
   const date = new Date().toLocaleString();
 
-  const tableRows = inefficient.map((r) => {
+  const tableRows = reportRows.map((r) => {
     const eff = r._efficiency;
-    const isCritical = eff.status === "critical";
-    const ratioColor = isCritical ? "#dc2626" : "#d97706";
     const tags = [
       r._isAllTime ? "all-time" : null,
-      r._isNoIndex ? "rest api search" : null,
     ].filter(Boolean);
+
+    const durationCell = r._isAllTime
+      ? `<span style="color:#dc2626;font-weight:700">All-Time Search</span>`
+      : `<span style="color:#ea580c;font-weight:700;font-family:monospace">${eff.ratio !== null ? eff.ratio.toFixed(1) + "x" : "?"}</span>
+         <br><small style="color:#64748b;font-weight:400">${
+           eff.valueSec !== null && eff.cronIntervalSec !== null
+             ? `${formatSeconds(eff.valueSec)} window / ${formatSeconds(eff.cronIntervalSec)} interval`
+             : eff.message
+         }</small>`;
 
     return `
       <tr class="data-row">
         <td>
           <span class="name">${escapeHtml(r["title"] || "")}</span>
-          ${tags.map((t) => `<span class="tag ${t === "all-time" ? "tag-alltime" : "tag-noindex"}">${t}</span>`).join("")}
+          ${tags.map((t) => `<span class="tag tag-alltime">${t}</span>`).join("")}
         </td>
         <td class="mono">${escapeHtml(r["cron_schedule"] || "—")}<br><small>${escapeHtml(cronToHuman(r["cron_schedule"] || ""))}</small></td>
         <td class="mono">${escapeHtml(r["dispatch.earliest_time"] || "—")}</td>
@@ -221,14 +229,7 @@ function generatePDFReport(rows: any[], serverName = "") {
         <td>${escapeHtml(r["eai:acl.app"] || "—")}</td>
         <td>${escapeHtml(r["eai:acl.owner"] || "—")}</td>
         <td>${escapeHtml(r["eai:acl.sharing"] || "—")}</td>
-        <td style="color:${ratioColor};font-weight:700;font-family:monospace;white-space:nowrap">
-          ${eff.ratio !== null ? eff.ratio.toFixed(1) + "x" : "?"}
-          <br><small style="color:#64748b;font-weight:400">${
-            eff.valueSec !== null && eff.cronIntervalSec !== null
-              ? `${formatSeconds(eff.valueSec)} window / ${formatSeconds(eff.cronIntervalSec)} interval`
-              : eff.message
-          }</small>
-        </td>
+        <td style="white-space:nowrap">${durationCell}</td>
       </tr>
       <tr class="spl-row">
         <td colspan="8"><code>${escapeHtml(r["search"] || "")}</code></td>
@@ -276,10 +277,9 @@ function generatePDFReport(rows: any[], serverName = "") {
     Generated ${date} &nbsp;·&nbsp; searches with Duration / Freq &gt; 1.0x only
   </div>
   <div class="summary">
-    <div class="stat"><div class="stat-val">${inefficient.length}</div><div class="stat-lbl">Inefficient searches</div></div>
-    <div class="stat"><div class="stat-val" style="color:#dc2626">${inefficient.filter((r) => r._efficiency.status === "critical").length}</div><div class="stat-lbl">Critical (&gt;2x)</div></div>
-    <div class="stat"><div class="stat-val" style="color:#d97706">${inefficient.filter((r) => r._efficiency.status === "warning").length}</div><div class="stat-lbl">Warning (1–2x)</div></div>
-    <div class="stat"><div class="stat-val" style="color:#c2410c">${inefficient.filter((r) => r._isAllTime).length}</div><div class="stat-lbl">All-time scans</div></div>
+    <div class="stat"><div class="stat-val">${reportRows.length}</div><div class="stat-lbl">Inefficient searches</div></div>
+    <div class="stat"><div class="stat-val" style="color:#ea580c">${reportRows.filter((r) => !r._isAllTime && (r._efficiency?.ratio ?? 0) > 1.0).length}</div><div class="stat-lbl">Ratio &gt; 1x</div></div>
+    <div class="stat"><div class="stat-val" style="color:#dc2626">${reportRows.filter((r) => r._isAllTime).length}</div><div class="stat-lbl">All-Time scans</div></div>
   </div>
   <table>
     <thead>
@@ -299,6 +299,46 @@ function generatePDFReport(rows: any[], serverName = "") {
     win.document.close();
     setTimeout(() => win.print(), 400);
   }
+}
+
+function exportCSV(rows: any[]) {
+  const exportRows = rows.filter((r) => !r._isNoIndex);
+  if (!exportRows.length) return;
+
+  function csvCell(val: string) {
+    const s = String(val ?? "").replace(/"/g, '""');
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
+  }
+
+  const headers = ["Search Name", "Cron", "Earliest", "Latest", "App", "User", "Sharing", "Duration/Freq", "Search SPL"];
+  const csvLines = [
+    headers.join(","),
+    ...exportRows.map((r) => {
+      const eff = r._efficiency;
+      const duration = r._isAllTime
+        ? "All-Time Search"
+        : eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?";
+      return [
+        r["title"] || "",
+        r["cron_schedule"] || "",
+        r["dispatch.earliest_time"] || "",
+        r["dispatch.latest_time"] || "",
+        r["eai:acl.app"] || "",
+        r["eai:acl.owner"] || "",
+        r["eai:acl.sharing"] || "",
+        duration,
+        r["search"] || "",
+      ].map(csvCell).join(",");
+    }),
+  ];
+
+  const blob = new Blob([csvLines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `scheduled-searches-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const LOG_LEVELS = ["DEBUG", "INFO", "WARN", "ERROR", "FATAL"] as const;
@@ -1024,13 +1064,22 @@ export function ScheduledSearchesPage() {
             </button>
           </div>
           {showEfficiency && inefficientCount > 0 && (
-            <button
-              onClick={() => generatePDFReport(filtered, splunkServerName)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
-            >
-              <FileDown size={12} />
-              PDF Report
-            </button>
+            <>
+              <button
+                onClick={() => generatePDFReport(filtered, splunkServerName)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
+              >
+                <FileDown size={12} />
+                PDF
+              </button>
+              <button
+                onClick={() => exportCSV(filtered)}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
+              >
+                <FileDown size={12} />
+                CSV
+              </button>
+            </>
           )}
           <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
             <input
