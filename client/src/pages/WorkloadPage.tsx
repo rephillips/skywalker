@@ -140,16 +140,20 @@ export function WorkloadPage() {
   const [rules, setRules] = useState<WorkloadRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rawRulesData, setRawRulesData] = useState<any>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
   async function fetchAll() {
     setLoading(true);
     setError(null);
     try {
       const [cfgRes, poolsRes, rulesRes] = await Promise.all([
-        api.proxy("workloads/config"),
-        api.proxy("workloads/pools"),
-        api.proxy("workloads/rules"),
+        api.proxy("workloads/config?count=0"),
+        api.proxy("workloads/pools?count=0"),
+        api.proxy("workloads/rules?count=0"),
       ]);
+
+      setRawRulesData(rulesRes);
 
       if (cfgRes.status === "error") throw new Error(cfgRes.message || "Failed to fetch workload config");
       if (poolsRes.status === "error") throw new Error(poolsRes.message || "Failed to fetch workload pools");
@@ -274,6 +278,22 @@ export function WorkloadPage() {
                   Refresh
                 </button>
               </div>
+            </div>
+
+            {/* ── Raw response inspector ── */}
+            <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+              <button
+                onClick={() => setShowRaw((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:text-gray-300 hover:bg-surface-hover transition-colors"
+              >
+                <span className="font-medium">Raw API Response (workloads/rules)</span>
+                <span className="text-[10px] text-gray-600">{showRaw ? "▲ hide" : "▼ show"}</span>
+              </button>
+              {showRaw && (
+                <pre className="px-4 pb-4 text-[10px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all overflow-auto max-h-64 border-t border-surface-border">
+                  {JSON.stringify(rawRulesData, null, 2)}
+                </pre>
+              )}
             </div>
 
             {/* ── Not configured ── */}

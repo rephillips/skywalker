@@ -682,12 +682,13 @@ export function ScheduledSearchesPage() {
       })
       .catch(() => {});
 
-    api.proxy("workloads/rules")
+    api.proxy("workloads/rules?count=0")
       .then((res) => {
         if (res.status !== "ok") return;
         const match = (res.data?.entry ?? []).find((e: any) => {
           const predicate: string = e.content?.predicate ?? "";
-          const disabled = e.content?.disabled === "1" || e.content?.disabled === true;
+          const d = e.content?.disabled;
+          const disabled = d === "1" || d === true || d === 1;
           return !disabled && /search_time_range\s*=\s*alltime/i.test(predicate);
         });
         setWlmAllTimeRule(match ? match.name : null);
