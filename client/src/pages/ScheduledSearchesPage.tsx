@@ -682,26 +682,16 @@ export function ScheduledSearchesPage() {
       })
       .catch(() => {});
 
-    // Check both admission-rules (primary) and placement rules for alltime predicate
-    Promise.allSettled([
-      api.proxy("workloads/admission-rules?count=0"),
-      api.proxy("workloads/rules?count=0"),
-    ]).then(([admissionResult, placementResult]) => {
-      const allEntries: any[] = [];
-      if (admissionResult.status === "fulfilled" && admissionResult.value.status === "ok") {
-        allEntries.push(...(admissionResult.value.data?.entry ?? []));
-      }
-      if (placementResult.status === "fulfilled" && placementResult.value.status === "ok") {
-        allEntries.push(...(placementResult.value.data?.entry ?? []));
-      }
-      const match = allEntries.find((e: any) => {
-        const predicate: string = e.content?.predicate ?? "";
-        const d = e.content?.disabled;
-        const disabled = d === "1" || d === true || d === 1;
-        return !disabled && /search_time_range\s*=\s*alltime/i.test(predicate);
-      });
-      setWlmAllTimeRule(match ? match.name : null);
-    });
+    // Use admission-control-status via workloads/status — the AllTime field is the authoritative signal
+    api.search(
+      `| rest /services/workloads/status splunk_server=local | search title=admission-control-status | table title search-filter-rules.AllTime.action search-filter-rules.AllTime.predicate`
+    ).then((res) => {
+      const row = res.results?.[0] as any;
+      const action: string = row?.["search-filter-rules.AllTime.action"] ?? "";
+      const predicate: string = row?.["search-filter-rules.AllTime.predicate"] ?? "";
+      const ruleName = action ? (predicate || action) : null;
+      setWlmAllTimeRule(ruleName);
+    }).catch(() => {});
   }, []);
 
   function toggleDisabled() {
@@ -1229,8 +1219,8 @@ export function ScheduledSearchesPage() {
                                   <div className="flex flex-col gap-0.5">
                                     <span className="text-[10px] font-medium text-red-400">All-Time Search</span>
                                     {wlmAllTimeRule && (
-                                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-400 border border-violet-500/25 whitespace-nowrap">
-                                        Filtered by WLM Rule
+                                      <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-violet-500/15 text-violet-400 border border-violet-500/25 whitespace-nowrap" title={`WLM Admission Rule: ${wlmAllTimeRule}`}>
+                                        WLM Admission Rule Active
                                       </span>
                                     )}
                                   </div>
