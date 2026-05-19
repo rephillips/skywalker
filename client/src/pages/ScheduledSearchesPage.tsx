@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers, FileDown } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
@@ -527,6 +527,21 @@ export function ScheduledSearchesPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [groupBy, setGroupBy] = useState<string>("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [filterApps, setFilterApps] = useState<Set<string>>(new Set());
+  const [filterUsers, setFilterUsers] = useState<Set<string>>(new Set());
+  const [appDropdownOpen, setAppDropdownOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const appDropdownRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (appDropdownRef.current && !appDropdownRef.current.contains(e.target as Node)) setAppDropdownOpen(false);
+      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) setUserDropdownOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   async function fetchRunTimes() {
     setRunTimesLoading(true);
@@ -693,9 +708,14 @@ export function ScheduledSearchesPage() {
     });
   }, [results, runTimes]);
 
+  const availableApps = useMemo(() => [...new Set(rowsWithEfficiency.map((r) => r["eai:acl.app"] || "").filter(Boolean))].sort(), [rowsWithEfficiency]);
+  const availableUsers = useMemo(() => [...new Set(rowsWithEfficiency.map((r) => r["eai:acl.owner"] || "").filter(Boolean))].sort(), [rowsWithEfficiency]);
+
   const filtered = rowsWithEfficiency.filter((r) => {
     const matchesText = !filter || Object.values(r).some((v) => typeof v === "string" && v.toLowerCase().includes(lowerFilter));
     if (!matchesText) return false;
+    if (filterApps.size > 0 && !filterApps.has(r["eai:acl.app"] || "")) return false;
+    if (filterUsers.size > 0 && !filterUsers.has(r["eai:acl.owner"] || "")) return false;
     if (showEfficiency) {
       if (r._isNoIndex) return false;
       if (r._isAllTime) return true;
@@ -856,14 +876,76 @@ export function ScheduledSearchesPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
           <input
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-100 outline-none focus:border-brand-500"
+            className="flex-1 min-w-[160px] rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-100 outline-none focus:border-brand-500"
             placeholder="Filter results..."
           />
+          {/* App filter */}
+          <div className="relative" ref={appDropdownRef}>
+            <button
+              onClick={() => { setAppDropdownOpen((o) => !o); setUserDropdownOpen(false); }}
+              className={clsx("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors", filterApps.size > 0 ? "border-brand-500/50 bg-brand-500/10 text-brand-400" : "border-surface-border text-gray-400 hover:text-gray-200")}
+            >
+              App {filterApps.size > 0 ? `(${filterApps.size})` : "▾"}
+            </button>
+            {appDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 z-20 w-56 rounded-xl border border-surface-border bg-surface-raised shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-surface-border">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Filter by App</span>
+                  {filterApps.size > 0 && <button onClick={() => setFilterApps(new Set())} className="text-[10px] text-brand-400 hover:text-brand-200">Clear</button>}
+                </div>
+                <div className="max-h-56 overflow-y-auto py-1">
+                  {availableApps.map((app) => (
+                    <button
+                      key={app}
+                      onClick={() => setFilterApps((prev) => { const next = new Set(prev); next.has(app) ? next.delete(app) : next.add(app); return next; })}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-surface-hover transition-colors"
+                    >
+                      <div className={clsx("w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0", filterApps.has(app) ? "bg-brand-500 border-brand-500" : "border-gray-600")}>
+                        {filterApps.has(app) && <Check size={9} className="text-white" />}
+                      </div>
+                      <span className={filterApps.has(app) ? "text-gray-100" : "text-gray-400"}>{app}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* User filter */}
+          <div className="relative" ref={userDropdownRef}>
+            <button
+              onClick={() => { setUserDropdownOpen((o) => !o); setAppDropdownOpen(false); }}
+              className={clsx("flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors", filterUsers.size > 0 ? "border-brand-500/50 bg-brand-500/10 text-brand-400" : "border-surface-border text-gray-400 hover:text-gray-200")}
+            >
+              User {filterUsers.size > 0 ? `(${filterUsers.size})` : "▾"}
+            </button>
+            {userDropdownOpen && (
+              <div className="absolute left-0 top-full mt-1 z-20 w-56 rounded-xl border border-surface-border bg-surface-raised shadow-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-surface-border">
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Filter by User</span>
+                  {filterUsers.size > 0 && <button onClick={() => setFilterUsers(new Set())} className="text-[10px] text-brand-400 hover:text-brand-200">Clear</button>}
+                </div>
+                <div className="max-h-56 overflow-y-auto py-1">
+                  {availableUsers.map((user) => (
+                    <button
+                      key={user}
+                      onClick={() => setFilterUsers((prev) => { const next = new Set(prev); next.has(user) ? next.delete(user) : next.add(user); return next; })}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-surface-hover transition-colors"
+                    >
+                      <div className={clsx("w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0", filterUsers.has(user) ? "bg-brand-500 border-brand-500" : "border-gray-600")}>
+                        {filterUsers.has(user) && <Check size={9} className="text-white" />}
+                      </div>
+                      <span className={filterUsers.has(user) ? "text-gray-100" : "text-gray-400"}>{user}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <Layers size={11} className="text-gray-500" />
             <span className="text-[10px] text-gray-500">Group:</span>
@@ -908,7 +990,7 @@ export function ScheduledSearchesPage() {
           </div>
           {showEfficiency && inefficientCount > 0 && (
             <button
-              onClick={() => generatePDFReport(rowsWithEfficiency, splunkServerName)}
+              onClick={() => generatePDFReport(filtered, splunkServerName)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 transition-colors"
             >
               <FileDown size={12} />
@@ -1012,8 +1094,7 @@ export function ScheduledSearchesPage() {
                                 <>
                                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: "#f97316", boxShadow: "0 0 6px #f9731680" }} />
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] font-medium text-orange-400">all-time</span>
-                                    <span className="text-[9px] text-gray-500">no time bound</span>
+                                    <span className="text-[10px] font-medium text-orange-400">All-Time Search</span>
                                   </div>
                                 </>
                               ) : (
