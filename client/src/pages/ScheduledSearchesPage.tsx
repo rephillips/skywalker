@@ -1110,11 +1110,9 @@ export function ScheduledSearchesPage() {
 
                     const eff = row._efficiency;
                     const rowHighlight = showEfficiency && row._isAllTime
-                      ? "bg-orange-500/5"
-                      : showEfficiency && eff.status === "critical"
                       ? "bg-red-500/5"
-                      : showEfficiency && eff.status === "warning"
-                      ? "bg-amber-500/5"
+                      : showEfficiency && (eff.status === "critical" || eff.status === "warning")
+                      ? "bg-orange-500/5"
                       : "";
 
                     return (<>
@@ -1128,9 +1126,9 @@ export function ScheduledSearchesPage() {
                             <div className="flex items-center gap-1.5">
                               {row._isAllTime ? (
                                 <>
-                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: "#f97316", boxShadow: "0 0 6px #f9731680" }} />
+                                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: "#ef4444", boxShadow: "0 0 6px #ef444480" }} />
                                   <div className="flex flex-col">
-                                    <span className="text-[10px] font-medium text-orange-400">All-Time Search</span>
+                                    <span className="text-[10px] font-medium text-red-400">All-Time Search</span>
                                   </div>
                                 </>
                               ) : (
@@ -1139,17 +1137,15 @@ export function ScheduledSearchesPage() {
                                     className="w-2.5 h-2.5 rounded-full shrink-0"
                                     style={{
                                       backgroundColor: eff.status === "ok" ? "#10b981"
-                                        : eff.status === "warning" ? "#eab308"
-                                        : eff.status === "critical" ? "#ef4444"
+                                        : (eff.status === "warning" || eff.status === "critical") ? "#f97316"
                                         : "#6b7280",
-                                      boxShadow: eff.status === "critical" ? "0 0 6px #ef444480" : undefined,
+                                      boxShadow: eff.status === "critical" ? "0 0 6px #f9731680" : undefined,
                                     }}
                                   />
                                   <div className="flex flex-col">
                                     <span className={clsx("text-[10px] font-medium", {
                                       "text-emerald-400": eff.status === "ok",
-                                      "text-amber-400": eff.status === "warning",
-                                      "text-red-400": eff.status === "critical",
+                                      "text-orange-400": eff.status === "warning" || eff.status === "critical",
                                       "text-gray-500": eff.status === "unknown",
                                     })}>
                                       {eff.ratio !== null ? `${eff.ratio.toFixed(1)}x` : "?"}
@@ -1165,7 +1161,7 @@ export function ScheduledSearchesPage() {
                               {!row._isAllTime && (eff.status === "warning" || eff.status === "critical") && fixingRow !== i && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); startFix(i, row); }}
-                                  className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+                                  className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors"
                                 >
                                   <Wrench size={9} /> Fix
                                 </button>
