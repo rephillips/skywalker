@@ -868,10 +868,10 @@ export function ScheduledSearchesPage() {
         <div className="flex gap-4 mb-6">
           <div className="flex-1 rounded-xl border border-surface-border bg-surface-raised p-4">
             <div className="flex items-center gap-2 mb-1">
-              <CalendarClock size={14} className="text-brand-400" />
-              <span className="text-2xl font-bold text-white">{results.length}</span>
+              <CalendarClock size={14} className="text-blue-400" />
+              <span className="text-2xl font-bold text-blue-400">{results.length}</span>
             </div>
-            <p className="text-xs text-gray-500">{showDisabled ? "Total Scheduled" : "Enabled Scheduled"}</p>
+            <p className="text-xs text-gray-500">{showDisabled ? "Total Scheduled" : "Enabled Scheduled Searches"}</p>
           </div>
           <div className="flex-1 rounded-xl border border-surface-border bg-surface-raised p-4">
             <div className="flex items-center gap-2 mb-1">
