@@ -113,7 +113,7 @@ Track `currentStanza` sequentially across lines so sub-stanzas like `[replicatio
 
 ### Display
 
-- **Card header**: two lines — (1) label + key value (`Replication Policy: rfs`), (2) the btool SPL command in `text-[10px] font-mono text-blue-400/60` directly below the title. Always show the command in the header so engineers know exactly what ran.
+- **Card header**: two lines — (1) label + key value (`Replication Policy: rfs`), (2) the btool SPL command in `text-[10px] font-mono text-emerald-400/60` directly below the title. Always show the command in the header so engineers know exactly what ran. Do not repeat the command at the bottom of the card.
 - **Body**: full-width, two-column monospace layout — left column is the file path (fixed width, `shrink-0`), right column is `attribute = value` or `[stanza]`. Use `whitespace-nowrap` on each row and `overflow-x-auto` on the container.
 - **Stanza name row** (`[stanzaName]`): render in `text-emerald-400/80` to distinguish it from attribute rows.
 - **Card border**: use `border-emerald-500/20` (thin green piping) to visually identify btool panels.
