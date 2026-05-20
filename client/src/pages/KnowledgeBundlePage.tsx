@@ -1,11 +1,158 @@
-import { useState, useEffect } from "react";
-import { RefreshCw, Loader2, Package } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 
 interface BundleInfo {
   [key: string]: any;
+}
+
+const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local | where stanza="replicationSettings" | table key, value`;
+
+const POLICY_DESCRIPTIONS: Record<string, string> = {
+  replication:    "Full replication — entire bundle pushed to all SHC members",
+  "light-weight": "Light-weight — only changed objects replicated",
+  none:           "No replication — each SH uses its own local bundle",
+};
+
+function ReplicationSettingsPanel() {
+  const [settings, setSettings] = useState<{ key: string; value: string }[]>([]);
+  const [captain, setCaptain] = useState<string | null>(null);
+  const [currentSh, setCurrentSh] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [btoolRes, shcRes, infoRes] = await Promise.all([
+        api.search(BTOOL_SPL),
+        api.proxy("shcluster/member/members"),
+        api.proxy("server/info"),
+      ]);
+
+      if (btoolRes.results?.length > 0) {
+        const rows = btoolRes.results.map((r: any) => ({ key: r.key as string, value: r.value as string }));
+        // replicationPolicy first, rest alphabetical
+        rows.sort((a: any, b: any) => {
+          if (a.key === "replicationPolicy") return -1;
+          if (b.key === "replicationPolicy") return 1;
+          return a.key.localeCompare(b.key);
+        });
+        setSettings(rows);
+      } else {
+        setSettings([]);
+      }
+
+      const entries: any[] = shcRes.data?.entry ?? [];
+      const captainEntry = entries.find((e: any) => {
+        const v = e.content?.is_captain;
+        return v === "1" || v === true || v === 1;
+      });
+      if (captainEntry) {
+        const label: string = captainEntry.content?.label || captainEntry.name || "";
+        setCaptain(label.split(".")[0]);
+      }
+
+      const serverName = infoRes.data?.entry?.[0]?.content?.serverName;
+      if (serverName) setCurrentSh((serverName as string).split(".")[0]);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const policy = settings.find(s => s.key === "replicationPolicy")?.value ?? null;
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface-raised mb-6 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
+        <div className="flex items-center gap-2">
+          <Package size={14} className="text-brand-400" />
+          <h3 className="text-xs font-semibold text-white">Knowledge Bundle Replication Settings</h3>
+          <span className="text-[10px] text-gray-500">distsearch.conf [replicationSettings]</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* SH context */}
+          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+            {currentSh && (
+              <span className="flex items-center gap-1">
+                <Server size={10} />
+                {currentSh}
+              </span>
+            )}
+            {captain && (
+              <span className="flex items-center gap-1">
+                <Crown size={10} className="text-amber-400" />
+                <span className="text-amber-300">{captain}</span>
+              </span>
+            )}
+          </div>
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
+            {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="p-3"><ErrorAlert message={error} /></div>}
+
+      {loading && !settings.length && (
+        <div className="p-6 text-center">
+          <Loader2 size={20} className="mx-auto mb-2 text-brand-400 animate-spin" />
+          <p className="text-[11px] text-gray-500">Running btool...</p>
+        </div>
+      )}
+
+      {!loading && !error && settings.length === 0 && (
+        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
+          <AlertTriangle size={13} />
+          No results — Admin&apos;s Little Helper app may not be installed on this SH.
+        </div>
+      )}
+
+      {settings.length > 0 && (
+        <>
+          {/* replicationPolicy hero */}
+          {policy && (
+            <div className="px-4 py-3 border-b border-surface-border bg-surface/40">
+              <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-1">replicationPolicy</div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-lg font-bold font-mono text-brand-300">{policy}</span>
+                {POLICY_DESCRIPTIONS[policy] && (
+                  <span className="text-[11px] text-gray-400">{POLICY_DESCRIPTIONS[policy]}</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Remaining settings */}
+          <div className="divide-y divide-surface-border/50">
+            {settings
+              .filter(s => s.key !== "replicationPolicy")
+              .map(({ key, value }) => (
+                <div key={key} className="flex items-center px-4 py-2 hover:bg-surface-hover/30 transition-colors">
+                  <span className="w-64 shrink-0 text-[11px] font-mono text-gray-400">{key}</span>
+                  <span className="text-[11px] font-mono text-gray-200">{value}</span>
+                </div>
+              ))}
+          </div>
+
+          {/* SPL reference */}
+          <div className="px-4 py-2 border-t border-surface-border bg-surface/30">
+            <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function KnowledgeBundlePage() {
@@ -52,6 +199,7 @@ export function KnowledgeBundlePage() {
     <div className="flex-1 flex flex-col">
       <TopBar title="Knowledge Bundle" />
       <div className="p-6 max-w-4xl">
+        <ReplicationSettingsPanel />
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
