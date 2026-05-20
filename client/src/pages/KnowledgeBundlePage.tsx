@@ -285,25 +285,44 @@ function ReplicationSettingsPanel() {
             <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
           </div>
 
-          {/* Raw debug table */}
+          {/* Raw debug table — path, stanza, attribute, value only */}
           {showRaw && (
             <div className="border-t border-surface-border p-4">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — path · stanza · attribute · value</div>
               <div className="overflow-x-auto rounded border border-surface-border">
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-surface">
-                      {rawRows[0] && Object.keys(rawRows[0]).filter(k => !k.startsWith("_")).map(col => (
-                        <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                          {col}
-                        </th>
-                      ))}
+                      {rawRows[0] && Object.keys(rawRows[0])
+                        .filter(k => {
+                          if (k.startsWith("_")) return false;
+                          const ku = k.toUpperCase();
+                          // Keep: file path fields, stanza, keys, and non-BTOOL setting columns
+                          if (/^BTOOL\.CMD\.(FILE|PREFIX)$/.test(ku)) return true;
+                          if (/^BTOOL\.KEYS$/.test(ku)) return true;
+                          if (/^BTOOL\./.test(ku)) return false; // hide other BTOOL.CMD.* meta
+                          return true; // keep all setting value columns
+                        })
+                        .map(col => (
+                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                            {col}
+                          </th>
+                        ))}
                     </tr>
                   </thead>
                   <tbody>
                     {rawRows.map((r, i) => (
                       <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                        {Object.keys(rawRows[0]).filter(k => !k.startsWith("_")).map(col => (
+                        {Object.keys(rawRows[0])
+                          .filter(k => {
+                            if (k.startsWith("_")) return false;
+                            const ku = k.toUpperCase();
+                            if (/^BTOOL\.CMD\.(FILE|PREFIX)$/.test(ku)) return true;
+                            if (/^BTOOL\.KEYS$/.test(ku)) return true;
+                            if (/^BTOOL\./.test(ku)) return false;
+                            return true;
+                          })
+                          .map(col => (
                           <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
                             {String(r[col] ?? "")}
                           </td>
