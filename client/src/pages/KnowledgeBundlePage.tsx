@@ -36,7 +36,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     const prefixField = allFields.find(k => /^btool\.cmd\.prefix$/i.test(k));
     const confField   = allFields.find(k => /^btool\.cmd\.conf$/i.test(k));
     const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
-    // File path field: any field where at least one row has a value starting with "/"
+    // File path: any field where at least one row value starts with "/"
     const fileField   = allFields.find(k => results.some(r => /^\//.test(String(r[k] ?? ""))));
     // Setting columns: everything that isn't a BTOOL.* meta field
     const settingCols = allFields.filter(k => !/^btool\./i.test(k));
@@ -52,22 +52,27 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
         ? String(row[fileField] ?? "")
         : confField ? String(row[confField] ?? "") : "";
 
-      // Stanza header row — emit once
       if (!addedStanza) {
         out.push({ file, content: `[${stanza || "replicationSettings"}]`, isStanza: true, stanza: stanza || "replicationSettings", rawObj: row });
         addedStanza = true;
       }
 
-      // Use BTOOL.KEYS to get the proper-case key name for this row
-      const btoolKey = keysField ? String(row[keysField] ?? "").trim() : null;
+      // BTOOL.KEYS is a comma-separated list of all keys in this row
+      const btoolKeysRaw = keysField ? String(row[keysField] ?? "").trim() : "";
+      const keys = btoolKeysRaw
+        ? btoolKeysRaw.split(",").map(k => k.trim()).filter(Boolean)
+        : [];
 
-      if (btoolKey) {
-        // Find the matching uppercase column for the value
-        const matchCol = settingCols.find(c => c.toUpperCase() === btoolKey.toUpperCase());
-        const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
-        out.push({ file, content: `${btoolKey} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+      if (keys.length > 0) {
+        for (const key of keys) {
+          // Match key to column: dots/underscores stripped, case-insensitive
+          const normalise = (s: string) => s.toUpperCase().replace(/[\._]/g, "");
+          const matchCol = settingCols.find(c => normalise(c) === normalise(key));
+          const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
+          out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+        }
       } else {
-        // Fallback: emit a row for every non-empty setting column
+        // Fallback: one row per non-empty setting column
         for (const col of settingCols) {
           const val = String(row[col] ?? "").trim();
           if (!val) continue;
@@ -285,24 +290,16 @@ function ReplicationSettingsPanel() {
             <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
           </div>
 
-          {/* Raw debug table — path, stanza, attribute, value only */}
+          {/* Raw debug table — all fields to help identify path column */}
           {showRaw && (
             <div className="border-t border-surface-border p-4">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — path · stanza · attribute · value</div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
               <div className="overflow-x-auto rounded border border-surface-border">
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-surface">
                       {rawRows[0] && Object.keys(rawRows[0])
-                        .filter(k => {
-                          if (k.startsWith("_")) return false;
-                          const ku = k.toUpperCase();
-                          // Keep: file path fields, stanza, keys, and non-BTOOL setting columns
-                          if (/^BTOOL\.CMD\.(FILE|PREFIX)$/.test(ku)) return true;
-                          if (/^BTOOL\.KEYS$/.test(ku)) return true;
-                          if (/^BTOOL\./.test(ku)) return false; // hide other BTOOL.CMD.* meta
-                          return true; // keep all setting value columns
-                        })
+                        .filter(k => !k.startsWith("_"))
                         .map(col => (
                           <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
                             {col}
@@ -314,14 +311,7 @@ function ReplicationSettingsPanel() {
                     {rawRows.map((r, i) => (
                       <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
                         {Object.keys(rawRows[0])
-                          .filter(k => {
-                            if (k.startsWith("_")) return false;
-                            const ku = k.toUpperCase();
-                            if (/^BTOOL\.CMD\.(FILE|PREFIX)$/.test(ku)) return true;
-                            if (/^BTOOL\.KEYS$/.test(ku)) return true;
-                            if (/^BTOOL\./.test(ku)) return false;
-                            return true;
-                          })
+                          .filter(k => !k.startsWith("_"))
                           .map(col => (
                           <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
                             {String(r[col] ?? "")}
