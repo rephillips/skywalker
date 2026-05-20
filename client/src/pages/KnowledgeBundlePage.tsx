@@ -364,8 +364,10 @@ export function KnowledgeBundlePage() {
   return (
     <div className="flex-1 flex flex-col">
       <TopBar title="Knowledge Bundle" />
-      <div className="p-6 max-w-4xl">
+      <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
+      </div>
+      <div className="p-6 max-w-4xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
