@@ -111,7 +111,7 @@ function SshPanel() {
                   const cmd = `p0 login ${env}`;
                   return (
                     <div key={env} className="flex items-center gap-2 rounded-md bg-surface px-2.5 py-1.5 border border-surface-border/50">
-                      <code className="text-[11px] font-mono text-gray-300">{cmd}</code>
+                      <code className="text-[11px] font-mono text-emerald-300">{cmd}</code>
                       <CopyButton text={cmd} size={12} />
                     </div>
                   );
