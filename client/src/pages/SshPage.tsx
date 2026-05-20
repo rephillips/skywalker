@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { RefreshCw, Loader2, Terminal, ExternalLink, ChevronDown, ChevronUp, Crown, Server, Database, Search } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -24,7 +24,7 @@ function SshCommandRow({ label, host, icon }: { label: string; host: string; ico
 }
 
 function SshPanel() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [captain, setCaptain] = useState<string | null>(null);
   const [otherShs, setOtherShs] = useState<string[]>([]);
   const [cm, setCm] = useState<string | null>(null);
@@ -69,12 +69,9 @@ function SshPanel() {
     setFetched(true);
   }, []);
 
-  const toggle = () => {
-    setOpen(o => {
-      if (!o && !fetched) fetchData();
-      return !o;
-    });
-  };
+  useEffect(() => { fetchData(); }, []);
+
+  const toggle = () => setOpen(o => !o);
 
   return (
     <div className="mb-4 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
