@@ -13,16 +13,69 @@ const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=loc
 const POLICY_DESCRIPTIONS: Record<string, string> = {
   replication:    "Full replication — entire bundle pushed to all SHC members",
   "light-weight": "Light-weight — only changed objects replicated",
+  rfs:            "Remote file system — bundle stored on S3/remote, not replicated between SHs",
   none:           "No replication — each SH uses its own local bundle",
 };
 
+interface BtoolRow {
+  file: string;
+  content: string;   // "[stanza]" or "key = value"
+  isStanza: boolean;
+  stanza: string;    // current stanza name (no brackets)
+  rawObj: any;
+}
+
+function parseBtoolRows(results: any[]): BtoolRow[] {
+  if (!results.length) return [];
+  const first = results[0];
+  const fields = Object.keys(first).filter(k => !k.startsWith("_"));
+
+  // File field: the one whose value looks like a path
+  const fileField = fields.find(k => String(first[k]).startsWith("/")) ?? fields[0];
+  const otherFields = fields.filter(k => k !== fileField);
+
+  // Try to reconstruct "key = value" or "[stanza]" from remaining fields
+  const getContent = (row: any): string => {
+    if (otherFields.length === 0) return "";
+    if (otherFields.length === 1) return String(row[otherFields[0]] ?? "");
+    const attrField = otherFields.find(k => k === "attribute" || k === "key") ?? otherFields[0];
+    const valField  = otherFields.find(k => k === "value") ?? otherFields[1];
+    const attr = String(row[attrField] ?? "").trim();
+    const val  = String(row[valField]  ?? "").trim();
+    if (!attr) return val;
+    if (!val || attr.startsWith("[")) return attr;
+    return `${attr} = ${val}`;
+  };
+
+  // Walk rows, track current stanza, filter to [replicationSettings] only
+  const out: BtoolRow[] = [];
+  let currentStanza = "";
+
+  for (const row of results) {
+    const file    = String(row[fileField] ?? "");
+    const content = getContent(row).trim();
+    const isStanza = /^\[.+\]$/.test(content);
+    if (isStanza) currentStanza = content.replace(/^\[/, "").replace(/\]$/, "");
+    if (currentStanza !== "replicationSettings") continue;
+    out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+  }
+
+  return out.length > 0 ? out : results.map(row => ({
+    file: String(row[fileField] ?? ""),
+    content: getContent(row),
+    isStanza: false,
+    stanza: "",
+    rawObj: row,
+  }));
+}
+
 function ReplicationSettingsPanel() {
-  const [settings, setSettings] = useState<{ key: string; value: string; _raw: any }[]>([]);
-  const [showRaw, setShowRaw] = useState(false);
-  const [captain, setCaptain] = useState<string | null>(null);
+  const [rawRows, setRawRows]     = useState<any[]>([]);
+  const [showRaw, setShowRaw]     = useState(false);
+  const [captain, setCaptain]     = useState<string | null>(null);
   const [currentSh, setCurrentSh] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,37 +87,7 @@ function ReplicationSettingsPanel() {
         api.proxy("server/info"),
       ]);
 
-      if (btoolRes.results?.length > 0) {
-        const raw = btoolRes.results;
-        // Try common field name patterns for btool output
-        const firstRow = raw[0];
-        const keyField   = "key"       in firstRow ? "key"       : "attribute" in firstRow ? "attribute" : Object.keys(firstRow).find(k => !k.startsWith("_")) ?? "key";
-        const valueField = "value"     in firstRow ? "value"     : Object.keys(firstRow).find(k => k !== keyField && !k.startsWith("_")) ?? "value";
-        const stanzaField = "stanza"   in firstRow ? "stanza"    : null;
-
-        // Filter to [replicationSettings] only — try both with and without brackets
-        const filtered = stanzaField
-          ? raw.filter((r: any) => {
-              const s = String(r[stanzaField] ?? "");
-              return s === "replicationSettings" || s === "[replicationSettings]";
-            })
-          : raw;
-
-        const rows = (filtered.length > 0 ? filtered : raw).map((r: any) => ({
-          key:   String(r[keyField]   ?? ""),
-          value: String(r[valueField] ?? ""),
-          _raw:  r,
-        }));
-
-        rows.sort((a: any, b: any) => {
-          if (a.key === "replicationPolicy") return -1;
-          if (b.key === "replicationPolicy") return 1;
-          return a.key.localeCompare(b.key);
-        });
-        setSettings(rows);
-      } else {
-        setSettings([]);
-      }
+      setRawRows(btoolRes.results ?? []);
 
       const entries: any[] = shcRes.data?.entry ?? [];
       const captainEntry = entries.find((e: any) => {
@@ -87,7 +110,9 @@ function ReplicationSettingsPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const policy = settings.find(s => s.key === "replicationPolicy")?.value ?? null;
+  const rows = parseBtoolRows(rawRows);
+  const policy = rows.find(r => r.content.startsWith("replicationPolicy ="))
+    ?.content.replace("replicationPolicy =", "").trim() ?? null;
 
   return (
     <div className="rounded-xl border border-surface-border bg-surface-raised mb-6 overflow-hidden">
@@ -96,10 +121,8 @@ function ReplicationSettingsPanel() {
         <div className="flex items-center gap-2">
           <Package size={14} className="text-brand-400" />
           <h3 className="text-xs font-semibold text-white">Knowledge Bundle Replication Settings</h3>
-          <span className="text-[10px] text-gray-500">distsearch.conf [replicationSettings]</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* SH context */}
           <div className="flex items-center gap-3 text-[10px] text-gray-500">
             {currentSh && (
               <span className="flex items-center gap-1">
@@ -114,7 +137,7 @@ function ReplicationSettingsPanel() {
               </span>
             )}
           </div>
-          {settings.length > 0 && (
+          {rawRows.length > 0 && (
             <button onClick={() => setShowRaw(s => !s)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
               {showRaw ? "Hide raw" : "Show raw"}
             </button>
@@ -129,74 +152,82 @@ function ReplicationSettingsPanel() {
 
       {error && <div className="p-3"><ErrorAlert message={error} /></div>}
 
-      {loading && !settings.length && (
+      {loading && !rawRows.length && (
         <div className="p-6 text-center">
           <Loader2 size={20} className="mx-auto mb-2 text-brand-400 animate-spin" />
           <p className="text-[11px] text-gray-500">Running btool...</p>
         </div>
       )}
 
-      {!loading && !error && settings.length === 0 && (
+      {!loading && !error && rawRows.length === 0 && (
         <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
           <AlertTriangle size={13} />
           No results — Admin&apos;s Little Helper app may not be installed on this SH.
         </div>
       )}
 
-      {settings.length > 0 && (
+      {rows.length > 0 && (
         <>
           {/* replicationPolicy hero */}
           {policy && (
-            <div className="px-4 py-3 border-b border-surface-border bg-surface/40">
+            <div className="px-6 py-4 border-b border-surface-border bg-surface/40">
               <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-1">replicationPolicy</div>
               <div className="flex items-baseline gap-3">
-                <span className="text-lg font-bold font-mono text-brand-300">{policy}</span>
+                <span className="text-xl font-bold font-mono text-brand-300">{policy}</span>
                 {POLICY_DESCRIPTIONS[policy] && (
-                  <span className="text-[11px] text-gray-400">{POLICY_DESCRIPTIONS[policy]}</span>
+                  <span className="text-xs text-gray-400">{POLICY_DESCRIPTIONS[policy]}</span>
                 )}
               </div>
             </div>
           )}
 
-          {/* Remaining settings */}
-          <div className="divide-y divide-surface-border/50">
-            {settings
-              .filter(s => s.key !== "replicationPolicy")
-              .map(({ key, value }) => (
-                <div key={key} className="flex items-center px-4 py-2 hover:bg-surface-hover/30 transition-colors">
-                  <span className="w-64 shrink-0 text-[11px] font-mono text-gray-400">{key}</span>
-                  <span className="text-[11px] font-mono text-gray-200">{value}</span>
+          {/* distsearch.conf label + rows */}
+          <div className="px-6 pt-4 pb-2">
+            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3 font-medium">distsearch.conf</div>
+            <div className="font-mono text-xs">
+              {rows.map((row, i) => (
+                <div key={i}>
+                  {/* Blank separator line before each stanza row (except the first) */}
+                  {row.isStanza && i > 0 && <div className="h-4" />}
+                  <div className={`flex items-baseline gap-0 py-0.5 ${row.isStanza ? "mt-0" : "hover:bg-surface-hover/20"}`}>
+                    <span className="text-gray-500 shrink-0 w-[480px] truncate pr-6">{row.file}</span>
+                    <span className={row.isStanza ? "text-cyan-300 font-semibold" : "text-gray-200"}>
+                      {row.content}
+                    </span>
+                  </div>
                 </div>
               ))}
+            </div>
           </div>
 
-          {/* Raw output for debugging */}
+          {/* SPL reference */}
+          <div className="px-6 py-3 mt-2 border-t border-surface-border bg-surface/30">
+            <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
+          </div>
+
+          {/* Raw debug table */}
           {showRaw && (
             <div className="border-t border-surface-border p-4">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw result rows — all fields</div>
-              <div className="overflow-auto rounded border border-surface-border">
-                <table className="w-full text-sm border-collapse">
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
+              <div className="overflow-x-auto rounded border border-surface-border">
+                <table className="w-full text-xs border-collapse">
                   <thead>
-                    <tr className="bg-surface sticky top-0">
-                      {settings[0] && Object.keys(settings[0]._raw)
-                        .filter(k => !k.startsWith("_") || k === "_raw")
-                        .map(col => (
-                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                            {col}
-                          </th>
-                        ))}
+                    <tr className="bg-surface">
+                      {rawRows[0] && Object.keys(rawRows[0]).filter(k => !k.startsWith("_")).map(col => (
+                        <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                          {col}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {settings.map((s, i) => (
+                    {rawRows.map((r, i) => (
                       <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                        {Object.keys(s._raw)
-                          .filter(k => !k.startsWith("_") || k === "_raw")
-                          .map(col => (
-                            <td key={col} className="px-4 py-2 text-xs font-mono text-gray-300 align-top">
-                              {String(s._raw[col] ?? "")}
-                            </td>
-                          ))}
+                        {Object.keys(rawRows[0]).filter(k => !k.startsWith("_")).map(col => (
+                          <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
+                            {String(r[col] ?? "")}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -204,11 +235,6 @@ function ReplicationSettingsPanel() {
               </div>
             </div>
           )}
-
-          {/* SPL reference */}
-          <div className="px-4 py-2 border-t border-surface-border bg-surface/30">
-            <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
-          </div>
         </>
       )}
     </div>
