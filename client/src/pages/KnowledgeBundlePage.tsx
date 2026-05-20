@@ -36,8 +36,13 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     const prefixField = allFields.find(k => /^btool\.cmd\.prefix$/i.test(k));
     const confField   = allFields.find(k => /^btool\.cmd\.conf$/i.test(k));
     const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
-    // File path: any field where at least one row value starts with "/"
-    const fileField   = allFields.find(k => results.some(r => /^\//.test(String(r[k] ?? ""))));
+    // File path: check ALL fields including _ prefixed (e.g. _raw) for a path value
+    const allFieldsIncRaw = Object.keys(results[0]);
+    const fileField = allFieldsIncRaw.find(k =>
+      results.some(r => /^\/opt\/splunk/.test(String(r[k] ?? "")))
+    ) ?? allFieldsIncRaw.find(k =>
+      results.some(r => /^\//.test(String(r[k] ?? "")))
+    );
     // Setting columns: everything that isn't a BTOOL.* meta field
     const settingCols = allFields.filter(k => !/^btool\./i.test(k));
 
@@ -299,7 +304,7 @@ function ReplicationSettingsPanel() {
                   <thead>
                     <tr className="bg-surface">
                       {rawRows[0] && Object.keys(rawRows[0])
-                        .filter(k => !k.startsWith("_"))
+                        .filter(k => !k.startsWith("_") || k === "_raw")
                         .map(col => (
                           <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
                             {col}
@@ -311,7 +316,7 @@ function ReplicationSettingsPanel() {
                     {rawRows.map((r, i) => (
                       <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
                         {Object.keys(rawRows[0])
-                          .filter(k => !k.startsWith("_"))
+                          .filter(k => !k.startsWith("_") || k === "_raw")
                           .map(col => (
                           <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
                             {String(r[col] ?? "")}
