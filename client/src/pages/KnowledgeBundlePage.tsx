@@ -39,17 +39,14 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     for (const row of results) {
       const rawStr = String(row._raw ?? "").trim();
       if (!rawStr.startsWith("/")) continue;
-      // Insert a newline before each new absolute path that follows non-whitespace
-      const lines = rawStr
-        .replace(/([^\s])(\/[a-z])/g, "$1\n$2")
-        .split("\n")
-        .map(l => l.trim())
-        .filter(l => l.startsWith("/"));
-      for (const line of lines) {
-        const m = line.match(/^(\S+)\s+(.*)/);
-        if (!m) continue;
-        const file    = m[1];
-        const content = m[2].trim();
+      // Extract each btool line: path ending in .conf, 2+ spaces, then content.
+      // Using a global regex match avoids incorrect splits inside the path itself.
+      const lineRe = /(\S+\.conf)\s{2,}(.*?)(?=\s*\S+\.conf\s{2,}|$)/gs;
+      const lineMatches = [...rawStr.matchAll(lineRe)];
+      if (!lineMatches.length) continue;
+      for (const lm of lineMatches) {
+        const file    = lm[1];
+        const content = lm[2].trim();
         const isStanza = /^\[.+\]$/.test(content);
         if (isStanza) currentStanza = content.slice(1, -1);
         if (currentStanza !== "replicationSettings") continue;
