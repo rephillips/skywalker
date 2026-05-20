@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { SkipForward, Play, Loader2, RefreshCw } from "lucide-react";
+import { SkipForward, Play, Loader2, RefreshCw, ChevronDown, ChevronUp, GitBranch } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import { CopyButton } from "../components/common/CopyButton";
+import { SchedulerFlowchart } from "../components/SchedulerFlowchart";
 import type { SplunkResult } from "../types/splunk";
 
 const DEFAULT_SPL = `index=_internal sourcetype=scheduler status=skipped
@@ -20,6 +21,7 @@ export function SkippedSearchesPage() {
   const [error, setError] = useState<string | null>(null);
   const [editSpl, setEditSpl] = useState(false);
   const [filter, setFilter] = useState("");
+  const [showFlowchart, setShowFlowchart] = useState(false);
 
   async function runSearch() {
     setLoading(true);
@@ -55,6 +57,26 @@ export function SkippedSearchesPage() {
             <h2 className="text-base font-semibold text-white">Skipped Scheduled Searches</h2>
             <p className="text-[10px] text-gray-500">Searches that were skipped by the scheduler (from _internal, last 24h)</p>
           </div>
+        </div>
+
+        {/* Troubleshooting Flowchart */}
+        <div className="rounded-xl border border-surface-border bg-surface-raised mb-4 overflow-hidden">
+          <button
+            onClick={() => setShowFlowchart((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <GitBranch size={14} className="text-emerald-400" />
+              <span className="text-sm font-semibold text-white">Scheduler Oversubscription — Decision Tree</span>
+              <span className="text-[10px] text-gray-500 font-normal ml-1">troubleshooting guide</span>
+            </div>
+            {showFlowchart ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
+          </button>
+          {showFlowchart && (
+            <div className="px-4 pb-4">
+              <SchedulerFlowchart />
+            </div>
+          )}
         </div>
 
         {/* SPL */}
