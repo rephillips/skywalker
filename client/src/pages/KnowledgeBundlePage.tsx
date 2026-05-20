@@ -27,14 +27,61 @@ interface BtoolRow {
 
 function parseBtoolRows(results: any[]): BtoolRow[] {
   if (!results.length) return [];
-  const first = results[0];
-  const fields = Object.keys(first).filter(k => !k.startsWith("_"));
+  const allFields = Object.keys(results[0]).filter(k => !k.startsWith("_"));
 
-  // File field: the one whose value looks like a path
-  const fileField = fields.find(k => String(first[k]).startsWith("/")) ?? fields[0];
-  const otherFields = fields.filter(k => k !== fileField);
+  // Detect Admin's Little Helper BTOOL.* format
+  const isBtoolFormat = allFields.some(k => /^btool\./i.test(k));
 
-  // Try to reconstruct "key = value" or "[stanza]" from remaining fields
+  if (isBtoolFormat) {
+    const prefixField = allFields.find(k => /^btool\.cmd\.prefix$/i.test(k));
+    const confField   = allFields.find(k => /^btool\.cmd\.conf$/i.test(k));
+    const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
+    // File path field: any field where at least one row has a value starting with "/"
+    const fileField   = allFields.find(k => results.some(r => /^\//.test(String(r[k] ?? ""))));
+    // Setting columns: everything that isn't a BTOOL.* meta field
+    const settingCols = allFields.filter(k => !/^btool\./i.test(k));
+
+    const out: BtoolRow[] = [];
+    let addedStanza = false;
+
+    for (const row of results) {
+      const stanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
+      if (stanza && stanza !== "replicationSettings") continue;
+
+      const file = fileField
+        ? String(row[fileField] ?? "")
+        : confField ? String(row[confField] ?? "") : "";
+
+      // Stanza header row — emit once
+      if (!addedStanza) {
+        out.push({ file, content: `[${stanza || "replicationSettings"}]`, isStanza: true, stanza: stanza || "replicationSettings", rawObj: row });
+        addedStanza = true;
+      }
+
+      // Use BTOOL.KEYS to get the proper-case key name for this row
+      const btoolKey = keysField ? String(row[keysField] ?? "").trim() : null;
+
+      if (btoolKey) {
+        // Find the matching uppercase column for the value
+        const matchCol = settingCols.find(c => c.toUpperCase() === btoolKey.toUpperCase());
+        const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
+        out.push({ file, content: `${btoolKey} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+      } else {
+        // Fallback: emit a row for every non-empty setting column
+        for (const col of settingCols) {
+          const val = String(row[col] ?? "").trim();
+          if (!val) continue;
+          out.push({ file, content: `${col} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Classic format: one field has a file path, others have key/value
+  const fileField = allFields.find(k => String(results[0][k]).startsWith("/")) ?? allFields[0];
+  const otherFields = allFields.filter(k => k !== fileField);
+
   const getContent = (row: any): string => {
     if (otherFields.length === 0) return "";
     if (otherFields.length === 1) return String(row[otherFields[0]] ?? "");
@@ -47,10 +94,8 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     return `${attr} = ${val}`;
   };
 
-  // Walk rows, track current stanza, filter to [replicationSettings] only
   const out: BtoolRow[] = [];
   let currentStanza = "";
-
   for (const row of results) {
     const file    = String(row[fileField] ?? "");
     const content = getContent(row).trim();
@@ -59,7 +104,6 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     if (currentStanza !== "replicationSettings") continue;
     out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
   }
-
   return out.length > 0 ? out : results.map(row => ({
     file: String(row[fileField] ?? ""),
     content: getContent(row),
