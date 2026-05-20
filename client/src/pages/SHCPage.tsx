@@ -5,6 +5,7 @@ import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import { CopyButton } from "../components/common/CopyButton";
+import { BtoolStanzaPanel } from "../components/panels/BtoolStanzaPanel";
 
 function formatDurationSince(epochSecs: number): string {
   if (!epochSecs) return "—";
@@ -527,6 +528,12 @@ export function SHCPage() {
       <div className="p-6">
         <ClusterStatusPanel />
         <ConcurrencyPanel />
+        <BtoolStanzaPanel
+          conf="server"
+          stanza="shclustering"
+          headerLabel="SHC Clustering Config"
+          headerKey="shcluster_label"
+        />
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
