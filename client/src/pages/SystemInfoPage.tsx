@@ -39,9 +39,10 @@ function SshPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cmRes, idxRes, shcRes] = await Promise.all([
+      const [cmRes, idxRes, shRes, shcRes] = await Promise.all([
         api.search("index=_internal host=c0* sourcetype=splunkd component=ClusteringMgr | head 1 | table host"),
         api.search("| rest /services/server/info splunk_server=idx-i* | table splunk_server"),
+        api.search("| rest /services/server/info splunk_server=sh-i* | table splunk_server"),
         api.proxy("shcluster/member/members"),
       ]);
 
@@ -53,21 +54,22 @@ function SshPanel() {
         setIndexers(idxRes.results.map((r: any) => shortHost(r.splunk_server as string)).sort());
       }
 
+      // Determine captain from shcluster/member/members
       const entries: any[] = shcRes.data?.entry ?? [];
       const captainEntry = entries.find((e: any) => {
         const v = e.content?.is_captain;
         return v === "1" || v === true || v === 1;
       });
-      if (captainEntry) {
-        const label: string = captainEntry.content?.label || captainEntry.name || "";
-        setCaptain(shortHost(label));
+      const captainShort = captainEntry
+        ? shortHost(captainEntry.content?.label || captainEntry.name || "")
+        : null;
+      if (captainShort) setCaptain(captainShort);
+
+      // All SHs visible via REST, non-captains as "other"
+      if (shRes.results?.length > 0) {
+        const allShs = shRes.results.map((r: any) => shortHost(r.splunk_server as string)).sort();
+        setOtherShs(captainShort ? allShs.filter(h => h !== captainShort) : allShs);
       }
-      const others = entries
-        .filter((e: any) => e !== captainEntry)
-        .map((e: any) => shortHost(e.content?.label || e.name || ""))
-        .filter(Boolean)
-        .sort();
-      setOtherShs(others);
     } catch {}
     setLoading(false);
     setFetched(true);
