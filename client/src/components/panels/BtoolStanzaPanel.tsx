@@ -66,7 +66,6 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
   const spl = `| btool ${conf} list ${stanza} splunk_server=local`;
 
   const [rawRows, setRawRows] = useState<any[]>([]);
-  const [showRaw, setShowRaw]  = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading]  = useState(true);
   const [error, setError]      = useState<string | null>(null);
@@ -110,12 +109,6 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
           </h3>
         </div>
         <div className="flex items-center gap-3">
-          {rawRows.length > 0 && (
-            <button onClick={() => setShowRaw(s => !s)}
-              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
-              {showRaw ? "Hide raw" : "Show raw"}
-            </button>
-          )}
           <button onClick={load} disabled={loading}
             className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
             {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
@@ -196,40 +189,6 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
             <code className="text-[10px] font-mono text-blue-400/70">{spl}</code>
           </div>
 
-          {/* Raw debug table */}
-          {showRaw && (
-            <div className="border-t border-surface-border p-4">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
-              <div className="overflow-x-auto rounded border border-surface-border">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-surface">
-                      {rawRows[0] && Object.keys(rawRows[0])
-                        .filter(k => !k.startsWith("_") || k === "_raw")
-                        .map(col => (
-                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                            {col}
-                          </th>
-                        ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rawRows.map((r, i) => (
-                      <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                        {Object.keys(rawRows[0])
-                          .filter(k => !k.startsWith("_") || k === "_raw")
-                          .map(col => (
-                            <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
-                              {String(r[col] ?? "")}
-                            </td>
-                          ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
