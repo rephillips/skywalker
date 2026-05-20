@@ -29,8 +29,9 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
   if (!results.length) return [];
 
   // Prefer _raw parsing — gives us the full file path directly.
-  // Format per line: "/opt/splunk/etc/.../file.conf    attribute = value"
-  //               or "/opt/splunk/etc/.../file.conf    [stanzaName]"
+  // Each result's _raw may contain multiple btool lines concatenated:
+  //   "/opt/splunk/.../file.conf    [stanzaName]/opt/splunk/.../file.conf    key = value..."
+  // Split on each new absolute path that follows non-whitespace content.
   const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
   if (hasRawPaths) {
     const out: BtoolRow[] = [];
@@ -38,15 +39,22 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     for (const row of results) {
       const rawStr = String(row._raw ?? "").trim();
       if (!rawStr.startsWith("/")) continue;
-      const m = rawStr.match(/^(\S+)\s+(.*)/);
-      if (!m) continue;
-      const file    = m[1];
-      const content = m[2].trim();
-      const isStanza = /^\[.+\]$/.test(content);
-      if (isStanza) currentStanza = content.slice(1, -1);
-      // Only include exact [replicationSettings] stanza, not sub-stanzas like :refineConf
-      if (currentStanza !== "replicationSettings") continue;
-      out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+      // Insert a newline before each new absolute path that follows non-whitespace
+      const lines = rawStr
+        .replace(/([^\s])(\/[a-z])/g, "$1\n$2")
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.startsWith("/"));
+      for (const line of lines) {
+        const m = line.match(/^(\S+)\s+(.*)/);
+        if (!m) continue;
+        const file    = m[1];
+        const content = m[2].trim();
+        const isStanza = /^\[.+\]$/.test(content);
+        if (isStanza) currentStanza = content.slice(1, -1);
+        if (currentStanza !== "replicationSettings") continue;
+        out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+      }
     }
     if (out.length > 0) return out;
   }
