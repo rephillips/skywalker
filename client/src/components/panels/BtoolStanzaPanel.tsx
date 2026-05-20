@@ -99,14 +99,17 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
     <div className="rounded-xl border border-surface-border bg-surface-raised mb-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
-        <div className="flex items-center gap-2">
-          <FileText size={14} className="text-brand-400" />
-          <h3 className="text-xs font-semibold text-white">
-            {headerLabel}
-            {headerValue && (
-              <span className="text-brand-300 font-mono">: {headerValue}</span>
-            )}
-          </h3>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <FileText size={14} className="text-brand-400" />
+            <h3 className="text-xs font-semibold text-white">
+              {headerLabel}
+              {headerValue && (
+                <span className="text-brand-300 font-mono">: {headerValue}</span>
+              )}
+            </h3>
+          </div>
+          <code className="text-[10px] font-mono text-blue-400/60 pl-5">{spl}</code>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={load} disabled={loading}
@@ -184,12 +187,8 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
             </div>
           )}
 
-          {/* SPL reference */}
-          <div className="px-6 py-3 border-t border-surface-border bg-surface/30">
-            <code className="text-[10px] font-mono text-blue-400/70">{spl}</code>
-          </div>
 
-        </>
+</>
       )}
     </div>
   );
