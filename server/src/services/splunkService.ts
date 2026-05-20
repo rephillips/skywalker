@@ -120,7 +120,7 @@ export async function executeSearch(
     const status = await getJobStatus(sid);
     console.log(`[Poll] sid=${sid} state=${status.dispatchState} progress=${status.doneProgress} resultCount=${status.resultCount}`);
     if (status.dispatchState === "DONE") {
-      const results = await getJobResults(sid, 1000);
+      const results = await getJobResults(sid, 0); // 0 = all results
       results.sid = sid;
       return results;
     }
