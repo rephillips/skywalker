@@ -74,7 +74,7 @@ function SshPanel() {
   const toggle = () => setOpen(o => !o);
 
   return (
-    <div className="mb-4 rounded-xl border border-surface-border bg-surface-raised overflow-hidden">
+    <div className="mb-4 rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden">
       <button
         onClick={toggle}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors"
