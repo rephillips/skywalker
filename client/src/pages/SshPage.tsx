@@ -164,9 +164,6 @@ function SshPanel() {
                     </div>
                   );
                 })()}
-                <p className="text-[10px] text-gray-600 mt-1">
-                  P0 issues a temporary key and runs <code className="text-gray-400">scp ./report.pdf ubuntu@&lt;instance-id&gt;:/var/www/reports/</code>
-                </p>
               </div>
               <div>
                 <div className="text-[10px] text-gray-400 mb-1.5">2. Copy remote file to local</div>
@@ -180,9 +177,6 @@ function SshPanel() {
                     </div>
                   );
                 })()}
-                <p className="text-[10px] text-gray-600 mt-1">
-                  Retrieves the remote file into your current directory.
-                </p>
               </div>
             </div>
           </div>
