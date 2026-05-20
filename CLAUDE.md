@@ -78,6 +78,50 @@ React Router mounts and unmounts page components as the user navigates. A `useEf
 
 Add to an existing router in `server/src/routes/` or create a new one and register it in `server/src/index.ts` under `/api`.
 
+## Btool panels
+
+When asked to display btool output for a `<file>` and `<stanza>`, build a self-contained panel component using this established pattern (see `ReplicationSettingsPanel` in `client/src/pages/KnowledgeBundlePage.tsx`).
+
+### SPL
+
+```
+| btool <confname> list <stanza> splunk_server=local
+```
+
+Example: `| btool distsearch list replicationSettings splunk_server=local`
+
+### `_raw` format and parsing
+
+Admin's Little Helper returns btool output in `_raw`. Each logical line is:
+
+```
+/opt/splunk/etc/apps/myapp/local/file.conf    [stanzaName]
+/opt/splunk/etc/system/default/file.conf      key = value
+```
+
+**Critical**: `_raw` per Splunk result row contains ALL lines for that stanza concatenated — there may be no newline characters (the HTML table collapses them visually). Parse with `splitRaw()`:
+
+1. **Try `\n` splitting first** — split `_raw` on `\r?\n`, filter lines matching `/^\S+\.conf\s/`. If you get more than one line this way, parse each as `path + 2+spaces + content`. No ambiguity with path-valued attributes.
+2. **Detect the Splunk base path** from the first absolute path found (e.g. `/opt/splunk`, `/home/splunk`) — use `rawStr.match(/^(\/[^/]+\/[^/]+)\//)`.
+3. **Concatenated fallback** — use regex `(\S+\.conf)\s{2,}(.*?)(?=<escapedBase>\/|$)` with `gs` flags. Anchoring on the detected base path prevents false splits inside S3 URLs (`path = s3://bucket/prefix/`) or other path-valued attributes.
+
+Track `currentStanza` sequentially across lines so sub-stanzas like `[replicationSettings:refineConf]` are automatically excluded when you only want `[replicationSettings]`.
+
+### Display
+
+- **Card header**: `<Label>: <value>` where value is derived from a named attribute in the results (e.g. `Replication Policy: rfs`). Show a loading state before results arrive.
+- **Body**: full-width, two-column monospace layout — left column is the file path (fixed width, `shrink-0`), right column is `attribute = value` or `[stanza]`. Use `whitespace-nowrap` on each row and `overflow-x-auto` on the container.
+- **Stanza header rows** (`[stanzaName]`) appear in the results and are rendered inline with their source file path.
+- **Expand/collapse**: show the first 20 rows (`PREVIEW_ROWS = 20`) per stanza group; add a "Show N more / Collapse" toggle.
+- **SPL reference**: show the raw SPL string at the bottom of the card in a monospace dimmed style.
+- **Show raw toggle**: optional debug table showing all fields including `_raw` — useful when diagnosing parse issues.
+
+### Key attributes to highlight
+
+For any new btool panel, identify the single most important attribute and show it in the card header. For example:
+- `distsearch list replicationSettings` → header key: `replicationPolicy`
+- Add a `DESCRIPTIONS` map for known values (e.g. `rfs: "Remote file system — S3-based"`)
+
 ## Environment Variables
 
 The `.env` file lives at the repo root and is loaded by the server.
