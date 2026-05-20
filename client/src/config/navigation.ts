@@ -18,6 +18,7 @@ import {
   Network,
   Stethoscope,
   Gauge,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ export const navigation: NavItem[] = [
     ],
   },
   { label: "System Info", icon: MonitorCog, path: "/system-info" },
+  { label: "SSH", icon: KeyRound, path: "/ssh" },
   { label: "Search Head Clustering", icon: Network, path: "/shc" },
   { label: "Diagnostics", icon: Stethoscope, path: "/diagnostics" },
   { label: "Knowledge Bundles", icon: Package, path: "/knowledge" },

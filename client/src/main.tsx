@@ -17,6 +17,7 @@ import { ScheduledSearchesPage } from "./pages/ScheduledSearchesPage";
 import { SHCPage } from "./pages/SHCPage";
 import { WorkloadPage } from "./pages/WorkloadPage";
 import { DiagnosticsPage } from "./pages/DiagnosticsPage";
+import { SshPage } from "./pages/SshPage";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -38,6 +39,7 @@ const router = createBrowserRouter([
       { path: "search/workload", element: <WorkloadPage /> },
       { path: "shc", element: <SHCPage /> },
       { path: "diagnostics", element: <DiagnosticsPage /> },
+      { path: "ssh", element: <SshPage /> },
       { path: "monitoring/:section", element: <PlaceholderPage /> },
       { path: "security", element: <PlaceholderPage /> },
     ],
