@@ -87,7 +87,16 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
         }
       }
     }
-    return out;
+
+    // Deduplicate by key name — keep first occurrence (highest precedence in merge chain)
+    const seenKeys = new Set<string>();
+    return out.filter(row => {
+      if (row.isStanza) return true;
+      const key = row.content.split(" = ")[0].trim();
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
   }
 
   // Classic format: one field has a file path, others have key/value
