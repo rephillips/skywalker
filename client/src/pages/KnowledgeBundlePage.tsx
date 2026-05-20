@@ -301,11 +301,11 @@ function ReplicationSettingsPanel() {
               const hidden = group.rows.length - PREVIEW_ROWS;
 
               return (
-                <div key={group.stanza} className="px-6 pt-4 pb-3">
+                <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
                   <div className="font-mono text-xs leading-5">
                     {visible.map((row, i) => (
-                      <div key={i} className="flex">
-                        <span className="text-gray-400 shrink-0 w-[420px] pr-8">{row.file}</span>
+                      <div key={i} className="flex whitespace-nowrap">
+                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
                         <span className="text-gray-100">{row.content}</span>
                       </div>
                     ))}
