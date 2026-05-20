@@ -90,6 +90,10 @@ When asked to display btool output for a `<file>` and `<stanza>`, build a self-c
 
 Example: `| btool distsearch list replicationSettings splunk_server=local`
 
+### Result count
+
+Always use `count=0` when fetching results — this tells the Splunk API to return all rows with no cap. The default is 1000, which silently truncates btool output for large stanzas or deep merge chains. `count=0` is already set in `server/src/services/splunkService.ts` (`executeSearch` → `getJobResults(sid, 0)`). Do not revert this to a fixed number.
+
 ### `_raw` format and parsing
 
 Admin's Little Helper returns btool output in `_raw`. Each logical line is:
