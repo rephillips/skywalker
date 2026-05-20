@@ -308,7 +308,7 @@ function ReplicationSettingsPanel() {
                     {visible.map((row, i) => (
                       <div key={i} className="flex whitespace-nowrap">
                         <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
-                        <span className="text-gray-100">{row.content}</span>
+                        <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>{row.content}</span>
                       </div>
                     ))}
                   </div>
