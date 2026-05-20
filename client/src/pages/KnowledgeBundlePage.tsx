@@ -69,13 +69,16 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
   }));
 }
 
+const PREVIEW_ROWS = 20;
+
 function ReplicationSettingsPanel() {
-  const [rawRows, setRawRows]     = useState<any[]>([]);
-  const [showRaw, setShowRaw]     = useState(false);
-  const [captain, setCaptain]     = useState<string | null>(null);
-  const [currentSh, setCurrentSh] = useState<string | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const [rawRows, setRawRows]         = useState<any[]>([]);
+  const [showRaw, setShowRaw]         = useState(false);
+  const [expanded, setExpanded]       = useState<Set<string>>(new Set());
+  const [captain, setCaptain]         = useState<string | null>(null);
+  const [currentSh, setCurrentSh]     = useState<string | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,27 +184,60 @@ function ReplicationSettingsPanel() {
             </div>
           )}
 
-          {/* distsearch.conf label + rows */}
-          <div className="px-6 pt-4 pb-2">
-            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3 font-medium">distsearch.conf</div>
-            <div className="font-mono text-xs">
-              {rows.map((row, i) => (
-                <div key={i}>
-                  {/* Blank separator line before each stanza row (except the first) */}
-                  {row.isStanza && i > 0 && <div className="h-4" />}
-                  <div className={`flex items-baseline gap-0 py-0.5 ${row.isStanza ? "mt-0" : "hover:bg-surface-hover/20"}`}>
-                    <span className="text-gray-500 shrink-0 w-[480px] truncate pr-6">{row.file}</span>
-                    <span className={row.isStanza ? "text-cyan-300 font-semibold" : "text-gray-200"}>
-                      {row.content}
-                    </span>
+          {/* Stanza groups */}
+          {(() => {
+            // Split rows into stanza groups
+            const groups: { stanza: string; rows: BtoolRow[] }[] = [];
+            let current: { stanza: string; rows: BtoolRow[] } | null = null;
+            for (const row of rows) {
+              if (row.isStanza) {
+                current = { stanza: row.stanza, rows: [row] };
+                groups.push(current);
+              } else if (current) {
+                current.rows.push(row);
+              }
+            }
+
+            return groups.map(group => {
+              const isExpanded = expanded.has(group.stanza);
+              const visible = isExpanded ? group.rows : group.rows.slice(0, PREVIEW_ROWS);
+              const hidden = group.rows.length - PREVIEW_ROWS;
+
+              return (
+                <div key={group.stanza} className="px-6 pt-4 pb-3">
+                  <div className="font-mono text-xs leading-5">
+                    {visible.map((row, i) => (
+                      <div key={i} className="flex">
+                        <span className="text-gray-400 shrink-0 w-[420px] pr-8">{row.file}</span>
+                        <span className="text-gray-100">{row.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1">
+                    {!isExpanded && hidden > 0 && (
+                      <button
+                        onClick={() => setExpanded(s => new Set([...s, group.stanza]))}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
+                      >
+                        Show {hidden} more
+                      </button>
+                    )}
+                    {isExpanded && (
+                      <button
+                        onClick={() => setExpanded(s => { const n = new Set(s); n.delete(group.stanza); return n; })}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
+                      >
+                        Collapse
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              );
+            });
+          })()}
 
           {/* SPL reference */}
-          <div className="px-6 py-3 mt-2 border-t border-surface-border bg-surface/30">
+          <div className="px-6 py-3 border-t border-surface-border bg-surface/30">
             <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
           </div>
 
