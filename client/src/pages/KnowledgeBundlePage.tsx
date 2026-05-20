@@ -40,8 +40,10 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
       const rawStr = String(row._raw ?? "").trim();
       if (!rawStr.startsWith("/")) continue;
       // Extract each btool line: path ending in .conf, 2+ spaces, then content.
-      // Using a global regex match avoids incorrect splits inside the path itself.
-      const lineRe = /(\S+\.conf)\s{2,}(.*?)(?=\s*\S+\.conf\s{2,}|$)/gs;
+      // Anchor the lookahead on /opt/splunk/ so S3 URLs like s3://bucket/prefix/
+      // don't trigger a false split (the generic \S+\.conf lookahead would match
+      // across the URL into the next line's path).
+      const lineRe = /(\S+\.conf)\s{2,}(.*?)(?=\/opt\/splunk\/|$)/gs;
       const lineMatches = [...rawStr.matchAll(lineRe)];
       if (!lineMatches.length) continue;
       for (const lm of lineMatches) {
