@@ -172,10 +172,36 @@ function ReplicationSettingsPanel() {
 
           {/* Raw output for debugging */}
           {showRaw && (
-            <div className="border-t border-surface-border p-3">
-              <pre className="text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-64 overflow-auto bg-surface rounded p-2">
-                {JSON.stringify(settings.map(s => s._raw), null, 2)}
-              </pre>
+            <div className="border-t border-surface-border p-4">
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw result rows — all fields</div>
+              <div className="overflow-auto rounded border border-surface-border">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-surface sticky top-0">
+                      {settings[0] && Object.keys(settings[0]._raw)
+                        .filter(k => !k.startsWith("_") || k === "_raw")
+                        .map(col => (
+                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                            {col}
+                          </th>
+                        ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {settings.map((s, i) => (
+                      <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                        {Object.keys(s._raw)
+                          .filter(k => !k.startsWith("_") || k === "_raw")
+                          .map(col => (
+                            <td key={col} className="px-4 py-2 text-xs font-mono text-gray-300 align-top">
+                              {String(s._raw[col] ?? "")}
+                            </td>
+                          ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
