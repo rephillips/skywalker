@@ -159,7 +159,7 @@ function SshPanel() {
                   const cmd = `p0 scp ./report.pdf ${exHost}:/var/www/reports/`;
                   return (
                     <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-surface-border/50">
-                      <code className="flex-1 text-[11px] font-mono text-sky-300 truncate">{cmd}</code>
+                      <code className="flex-1 text-[11px] font-mono text-emerald-300 truncate">{cmd}</code>
                       <CopyButton text={cmd} size={13} />
                     </div>
                   );
@@ -175,7 +175,7 @@ function SshPanel() {
                   const cmd = `p0 scp ${exHost}:/var/log/splunk/splunkd.log ./splunkd.log`;
                   return (
                     <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-surface-border/50">
-                      <code className="flex-1 text-[11px] font-mono text-sky-300 truncate">{cmd}</code>
+                      <code className="flex-1 text-[11px] font-mono text-emerald-300 truncate">{cmd}</code>
                       <CopyButton text={cmd} size={13} />
                     </div>
                   );
