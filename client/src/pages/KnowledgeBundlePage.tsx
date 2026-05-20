@@ -238,7 +238,7 @@ function ReplicationSettingsPanel() {
               Replication Policy{policy ? <span className="text-brand-300 font-mono">: {policy}</span> : null}
             </h3>
           </div>
-          <code className="text-[10px] font-mono text-blue-400/60 pl-5">{BTOOL_SPL}</code>
+          <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{BTOOL_SPL}</code>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 text-[10px] text-gray-500">
@@ -337,11 +337,6 @@ function ReplicationSettingsPanel() {
               );
             });
           })()}
-
-          {/* SPL reference */}
-          <div className="px-6 py-3 border-t border-surface-border bg-surface/30">
-            <code className="text-[10px] font-mono text-blue-400/70">{BTOOL_SPL}</code>
-          </div>
 
           {/* Raw debug table — all fields to help identify path column */}
           {showRaw && (

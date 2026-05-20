@@ -109,7 +109,7 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
               )}
             </h3>
           </div>
-          <code className="text-[10px] font-mono text-blue-400/60 pl-5">{spl}</code>
+          <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{spl}</code>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={load} disabled={loading}
