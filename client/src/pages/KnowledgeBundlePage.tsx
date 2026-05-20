@@ -8,7 +8,7 @@ interface BundleInfo {
   [key: string]: any;
 }
 
-const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local`;
+const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local | where 'BTOOL.CMD.PREFIX'="replicationSettings"`;
 
 const POLICY_DESCRIPTIONS: Record<string, string> = {
   replication:    "Full replication — entire bundle pushed to all SHC members",
@@ -51,6 +51,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
 
     for (const row of results) {
       const stanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
+      // Exact match only — exclude replicationSettings:refineConf and any sub-stanzas
       if (stanza && stanza !== "replicationSettings") continue;
 
       const file = fileField
@@ -74,6 +75,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
           const normalise = (s: string) => s.toUpperCase().replace(/[\._]/g, "");
           const matchCol = settingCols.find(c => normalise(c) === normalise(key));
           const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
+          if (!val) continue; // skip attributes with no value (refineConf rows)
           out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
         }
       } else {
