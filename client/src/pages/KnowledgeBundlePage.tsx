@@ -27,6 +27,30 @@ interface BtoolRow {
 
 function parseBtoolRows(results: any[]): BtoolRow[] {
   if (!results.length) return [];
+
+  // Prefer _raw parsing — gives us the full file path directly.
+  // Format per line: "/opt/splunk/etc/.../file.conf    attribute = value"
+  //               or "/opt/splunk/etc/.../file.conf    [stanzaName]"
+  const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
+  if (hasRawPaths) {
+    const out: BtoolRow[] = [];
+    let currentStanza = "";
+    for (const row of results) {
+      const rawStr = String(row._raw ?? "").trim();
+      if (!rawStr.startsWith("/")) continue;
+      const m = rawStr.match(/^(\S+)\s+(.*)/);
+      if (!m) continue;
+      const file    = m[1];
+      const content = m[2].trim();
+      const isStanza = /^\[.+\]$/.test(content);
+      if (isStanza) currentStanza = content.slice(1, -1);
+      // Only include exact [replicationSettings] stanza, not sub-stanzas like :refineConf
+      if (currentStanza !== "replicationSettings") continue;
+      out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+    }
+    if (out.length > 0) return out;
+  }
+
   const allFields = Object.keys(results[0]).filter(k => !k.startsWith("_"));
 
   // Detect Admin's Little Helper BTOOL.* format
@@ -36,8 +60,13 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     const prefixField = allFields.find(k => /^btool\.cmd\.prefix$/i.test(k));
     const confField   = allFields.find(k => /^btool\.cmd\.conf$/i.test(k));
     const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
-    // File path: any field where at least one row value starts with "/"
-    const fileField   = allFields.find(k => results.some(r => /^\//.test(String(r[k] ?? ""))));
+    // File path: check ALL fields including _ prefixed (e.g. _raw) for a path value
+    const allFieldsIncRaw = Object.keys(results[0]);
+    const fileField = allFieldsIncRaw.find(k =>
+      results.some(r => /^\/opt\/splunk/.test(String(r[k] ?? "")))
+    ) ?? allFieldsIncRaw.find(k =>
+      results.some(r => /^\//.test(String(r[k] ?? "")))
+    );
     // Setting columns: everything that isn't a BTOOL.* meta field
     const settingCols = allFields.filter(k => !/^btool\./i.test(k));
 
@@ -46,6 +75,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
 
     for (const row of results) {
       const stanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
+      // Exact match only — exclude replicationSettings:refineConf and any sub-stanzas
       if (stanza && stanza !== "replicationSettings") continue;
 
       const file = fileField
@@ -69,6 +99,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
           const normalise = (s: string) => s.toUpperCase().replace(/[\._]/g, "");
           const matchCol = settingCols.find(c => normalise(c) === normalise(key));
           const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
+          if (!val) continue; // skip attributes with no value (refineConf rows)
           out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
         }
       } else {
@@ -80,7 +111,16 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
         }
       }
     }
-    return out;
+
+    // Deduplicate by key name — keep first occurrence (highest precedence in merge chain)
+    const seenKeys = new Set<string>();
+    return out.filter(row => {
+      if (row.isStanza) return true;
+      const key = row.content.split(" = ")[0].trim();
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
   }
 
   // Classic format: one field has a file path, others have key/value
@@ -299,7 +339,7 @@ function ReplicationSettingsPanel() {
                   <thead>
                     <tr className="bg-surface">
                       {rawRows[0] && Object.keys(rawRows[0])
-                        .filter(k => !k.startsWith("_"))
+                        .filter(k => !k.startsWith("_") || k === "_raw")
                         .map(col => (
                           <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
                             {col}
@@ -311,7 +351,7 @@ function ReplicationSettingsPanel() {
                     {rawRows.map((r, i) => (
                       <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
                         {Object.keys(rawRows[0])
-                          .filter(k => !k.startsWith("_"))
+                          .filter(k => !k.startsWith("_") || k === "_raw")
                           .map(col => (
                           <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
                             {String(r[col] ?? "")}
