@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers, FileDown, Mail } from "lucide-react";
+import { AreaChart } from "@tremor/react";
+import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers, FileDown, Mail, Play, Activity } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -9,6 +10,14 @@ import { CopyButton } from "../components/common/CopyButton";
 
 const ENABLED_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" search="disabled=0" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, search';
 const ALL_SPL = '| rest splunk_server=local "/servicesNS/-/-/saved/searches/" search="is_scheduled=1" count=0 | table title, cron_schedule, dispatch.earliest_time, dispatch.latest_time, eai:acl.app, eai:acl.owner, eai:acl.sharing, next_scheduled_time, actions, disabled, search';
+
+const CONCURRENCY_SPL = `| rest /servicesNS/-/-/saved/searches splunk_server=local timeout=600 search="is_scheduled=1" search="disabled=0" earliest_time=-1h@m latest_time=now
+| table title cron_schedule scheduled_times
+| mvexpand scheduled_times
+| rename scheduled_times as _time
+| timechart span=1m count as "Searches Scheduled"
+| join splunk_server [| rest splunk_server=local timeout=600 "/services/server/status/limits/search-concurrency?cluster_wide_quota=1"
+    | stats max(max_hist_scheduled_searches) as "Max Concurrent Limit"]`;
 
 /** Parse a Splunk relative time string like -1h, -15m, -1d, -7d, -1h@h into offset seconds from now */
 function parseRelativeTimeOffsetSeconds(timeStr: string): number | null {
@@ -581,6 +590,13 @@ export function ScheduledSearchesPage() {
   const [runTimesLoading, setRunTimesLoading] = useState(false);
   const [splunkServerName, setSplunkServerName] = useState("");
   const [wlmAllTimeRule, setWlmAllTimeRule] = useState<string | null>(null);
+  // Concurrency timechart
+  const [showConcurrency, setShowConcurrency] = useState(false);
+  const [concurrencySpl, setConcurrencySpl] = useState(CONCURRENCY_SPL);
+  const [editConcurrencySpl, setEditConcurrencySpl] = useState(false);
+  const [concurrencyData, setConcurrencyData] = useState<any[]>([]);
+  const [concurrencyLoading, setConcurrencyLoading] = useState(false);
+  const [concurrencyError, setConcurrencyError] = useState<string | null>(null);
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [groupBy, setGroupBy] = useState<string>("");
@@ -624,6 +640,33 @@ export function ScheduledSearchesPage() {
       setRunTimes({});
     } finally {
       setRunTimesLoading(false);
+    }
+  }
+
+  async function fetchConcurrency(spl = concurrencySpl) {
+    setConcurrencyLoading(true);
+    setConcurrencyError(null);
+    try {
+      const res = await api.search(spl, "-1h@m", "now");
+      const rows = res.results || [];
+      const chartRows = rows.map((r: any) => {
+        const point: Record<string, string | number> = {};
+        const t = r["_time"];
+        if (t) {
+          const d = new Date(t);
+          point["Time"] = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+        const scheduled = Number(r["Searches Scheduled"]);
+        const limit = Number(r["Max Concurrent Limit"]);
+        if (!isNaN(scheduled)) point["Searches Scheduled"] = scheduled;
+        if (!isNaN(limit) && limit > 0) point["Max Concurrent Limit"] = limit;
+        return point;
+      });
+      setConcurrencyData(chartRows);
+    } catch (err) {
+      setConcurrencyError((err as Error).message);
+    } finally {
+      setConcurrencyLoading(false);
     }
   }
 
@@ -1448,6 +1491,102 @@ export function ScheduledSearchesPage() {
           </p>
         )}
 
+
+        {/* Scheduler Concurrency Timechart */}
+        <div className="rounded-xl border border-surface-border bg-surface-raised overflow-hidden mb-4">
+          <button
+            onClick={() => {
+              const next = !showConcurrency;
+              setShowConcurrency(next);
+              if (next && concurrencyData.length === 0 && !concurrencyLoading) fetchConcurrency();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
+          >
+            <Activity size={14} className="text-cyan-400 shrink-0" />
+            <span className="text-sm font-semibold text-white flex-1">Scheduler Concurrency</span>
+            <span className="text-[10px] text-gray-500 mr-2">Scheduled searches per minute vs. concurrency limit (last 1h)</span>
+            {showConcurrency ? <ChevronUp size={13} className="text-gray-500 shrink-0" /> : <ChevronDown size={13} className="text-gray-500 shrink-0" />}
+          </button>
+          {showConcurrency && (
+            <div className="border-t border-surface-border px-4 pb-4 pt-3">
+              {/* SPL editor */}
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
+                  <div className="flex items-center gap-2">
+                    <CopyButton text={concurrencySpl} />
+                    <button
+                      onClick={() => setEditConcurrencySpl((v) => !v)}
+                      className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
+                    >
+                      {editConcurrencySpl ? "Cancel" : "Edit"}
+                    </button>
+                  </div>
+                </div>
+                {editConcurrencySpl ? (
+                  <div className="flex flex-col gap-2">
+                    <textarea
+                      value={concurrencySpl}
+                      onChange={(e) => setConcurrencySpl(e.target.value)}
+                      rows={7}
+                      className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y"
+                      spellCheck={false}
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { fetchConcurrency(concurrencySpl); setEditConcurrencySpl(false); }}
+                        className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors"
+                      >
+                        <Play size={10} /> Run
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{concurrencySpl}</pre>
+                )}
+              </div>
+
+              {/* Run button */}
+              {!editConcurrencySpl && (
+                <button
+                  onClick={() => fetchConcurrency(concurrencySpl)}
+                  disabled={concurrencyLoading}
+                  className="mb-3 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
+                >
+                  {concurrencyLoading ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                  {concurrencyLoading ? "Running…" : "Run"}
+                </button>
+              )}
+
+              {concurrencyError && <div className="mb-3"><ErrorAlert message={concurrencyError} /></div>}
+
+              {concurrencyData.length > 0 && (() => {
+                const categories = ["Searches Scheduled", "Max Concurrent Limit"].filter(
+                  (k) => concurrencyData.some((r) => r[k] !== undefined)
+                );
+                return (
+                  <div className="rounded-lg border border-surface-border bg-surface p-3">
+                    <AreaChart
+                      data={concurrencyData}
+                      index="Time"
+                      categories={categories}
+                      colors={["cyan", "rose"]}
+                      yAxisWidth={40}
+                      showAnimation
+                      showLegend
+                      showGridLines
+                      style={{ height: 260 }}
+                    />
+                  </div>
+                );
+              })()}
+
+              {!concurrencyLoading && concurrencyData.length === 0 && !concurrencyError && (
+                <p className="text-xs text-gray-500 text-center py-6">Click Run to load the concurrency chart</p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Email card */}
         {showEfficiency && inefficientCount > 0 && (
