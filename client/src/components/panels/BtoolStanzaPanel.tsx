@@ -143,7 +143,7 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
             <div className="px-6 pt-4 pb-1 overflow-x-auto">
               <div className="font-mono text-xs leading-5 flex whitespace-nowrap">
                 <span className="text-gray-500 shrink-0 w-[520px] pr-8">{rows[0].file}</span>
-                <span className="text-gray-500">{rows[0].content}</span>
+                <span className="text-emerald-400/80">{rows[0].content}</span>
               </div>
             </div>
           )}
