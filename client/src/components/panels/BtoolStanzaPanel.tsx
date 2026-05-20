@@ -52,7 +52,7 @@ function parseBtoolRows(results: any[], stanza: string): BtoolRow[] {
   return out;
 }
 
-const PREVIEW_ROWS = 20;
+const PREVIEW_ROWS = 25;
 
 interface Props {
   conf: string;           // e.g. "server"

@@ -179,7 +179,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
   }));
 }
 
-const PREVIEW_ROWS = 20;
+const PREVIEW_ROWS = 25;
 
 function ReplicationSettingsPanel() {
   const [rawRows, setRawRows]         = useState<any[]>([]);
