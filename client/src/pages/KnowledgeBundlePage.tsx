@@ -233,7 +233,9 @@ function ReplicationSettingsPanel() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
         <div className="flex items-center gap-2">
           <Package size={14} className="text-brand-400" />
-          <h3 className="text-xs font-semibold text-white">Knowledge Bundle Replication Settings</h3>
+          <h3 className="text-xs font-semibold text-white">
+            Replication Policy{policy ? <span className="text-brand-300 font-mono">: {policy}</span> : null}
+          </h3>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 text-[10px] text-gray-500">
@@ -281,19 +283,6 @@ function ReplicationSettingsPanel() {
 
       {rows.length > 0 && (
         <>
-          {/* replicationPolicy hero */}
-          {policy && (
-            <div className="px-6 py-4 border-b border-surface-border bg-surface/40">
-              <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-1">replicationPolicy</div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-xl font-bold font-mono text-brand-300">{policy}</span>
-                {POLICY_DESCRIPTIONS[policy] && (
-                  <span className="text-xs text-gray-400">{POLICY_DESCRIPTIONS[policy]}</span>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Stanza groups */}
           {(() => {
             // Split rows into stanza groups
