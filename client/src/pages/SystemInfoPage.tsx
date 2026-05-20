@@ -30,6 +30,7 @@ function SshCommandRow({ label, host, icon }: { label: string; host: string; ico
 function SshPanel() {
   const [open, setOpen] = useState(false);
   const [captain, setCaptain] = useState<string | null>(null);
+  const [otherShs, setOtherShs] = useState<string[]>([]);
   const [cm, setCm] = useState<string | null>(null);
   const [indexers, setIndexers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,6 +62,12 @@ function SshPanel() {
         const label: string = captainEntry.content?.label || captainEntry.name || "";
         setCaptain(shortHost(label));
       }
+      const others = entries
+        .filter((e: any) => e !== captainEntry)
+        .map((e: any) => shortHost(e.content?.label || e.name || ""))
+        .filter(Boolean)
+        .sort();
+      setOtherShs(others);
     } catch {}
     setLoading(false);
     setFetched(true);
@@ -150,6 +157,15 @@ function SshPanel() {
                 />
               )}
 
+              {otherShs.map(sh => (
+                <SshCommandRow
+                  key={sh}
+                  label="SH"
+                  host={sh}
+                  icon={<Search size={12} />}
+                />
+              ))}
+
               {indexers.map(idx => (
                 <SshCommandRow
                   key={idx}
@@ -159,7 +175,7 @@ function SshPanel() {
                 />
               ))}
 
-              {!cm && !captain && indexers.length === 0 && (
+              {!cm && !captain && otherShs.length === 0 && indexers.length === 0 && (
                 <p className="text-[11px] text-gray-500">No hosts found — check that the stack is reachable.</p>
               )}
             </div>
