@@ -258,12 +258,12 @@ function generatePDFReport(rows: any[], serverName = "", wlmBlocked = false) {
     .stack-name { font-size: 15px; font-weight: 600; color: #0ea5e9; margin: 0 0 3px; letter-spacing: -0.01em; }
     .meta { color: #64748b; font-size: 10px; margin-bottom: 18px; }
     .server { font-family: monospace; font-size: 9.5px; color: #94a3b8; }
-    .summary { display: flex; gap: 20px; margin-bottom: 20px; }
-    .stat { background: #f1f5f9; border-radius: 8px; padding: 10px 16px; }
+    .summary { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat { background: #f3f4f6; border: 1.5px solid #111827; border-radius: 8px; padding: 10px 16px; }
     .stat-val { font-size: 22px; font-weight: 700; }
     .stat-lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
     table { width: 100%; border-collapse: collapse; }
-    thead th { background: #1e293b; color: #e2e8f0; padding: 7px 10px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+    thead th { background: #111827; color: #f9fafb; padding: 8px 10px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
     .data-row td { padding: 8px 10px 4px; border-top: 1px solid #e2e8f0; vertical-align: top; }
     .spl-row td { padding: 2px 10px 10px; border-bottom: 2px solid #e2e8f0; }
     code { font-family: "SF Mono", "Fira Code", monospace; font-size: 9.5px; color: #334155; white-space: pre-wrap; word-break: break-all; background: #f8fafc; display: block; padding: 6px 8px; border-radius: 4px; border: 1px solid #e2e8f0; }
