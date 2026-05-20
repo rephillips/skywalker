@@ -228,7 +228,7 @@ function ReplicationSettingsPanel() {
     ?.content.replace("replicationPolicy =", "").trim() ?? null;
 
   return (
-    <div className="rounded-xl border border-surface-border bg-surface-raised mb-6 overflow-hidden">
+    <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
         <div className="flex items-center gap-2">
