@@ -51,7 +51,7 @@ export const navigation: NavItem[] = [
   { label: "System Info", icon: MonitorCog, path: "/system-info" },
   { label: "Search Head Clustering", icon: Network, path: "/shc" },
   { label: "Diagnostics", icon: Stethoscope, path: "/diagnostics" },
-  { label: "Knowledge", icon: Package, path: "/knowledge" },
+  { label: "Knowledge Bundles", icon: Package, path: "/knowledge" },
   {
     label: "Audits",
     icon: ClipboardCheck,
