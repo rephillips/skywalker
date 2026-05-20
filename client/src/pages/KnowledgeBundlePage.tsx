@@ -29,26 +29,40 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
   if (!results.length) return [];
 
   // Prefer _raw parsing — gives us the full file path directly.
-  // Each result's _raw may contain multiple btool lines concatenated:
-  //   "/opt/splunk/.../file.conf    [stanzaName]/opt/splunk/.../file.conf    key = value..."
-  // Split on each new absolute path that follows non-whitespace content.
+  // btool output format: "/path/to/file.conf    key = value" (one per line).
+  // When Splunk returns _raw, the lines may be real-newline-separated OR
+  // concatenated into one string. Try newlines first (no ambiguity), then
+  // fall back to a regex that anchors on the detected installation base path.
   const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
   if (hasRawPaths) {
+    // Detect the Splunk installation base (e.g. /opt/splunk or /home/splunk)
+    // from the first absolute path seen in any _raw field.
+    const firstPath = String(results.find(r => /^\//.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
+    const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
+    const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
+    const escapedBase = splunkBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    function splitRaw(rawStr: string): Array<{ file: string; content: string }> {
+      // Case 1: real newlines present — each line is unambiguously one btool entry
+      const byNewline = rawStr.split(/\r?\n/).map(l => l.trim()).filter(l => /^\S+\.conf\s/.test(l));
+      if (byNewline.length > 1) {
+        return byNewline.flatMap(line => {
+          const m = line.match(/^(\S+\.conf)\s{2,}(.*)/);
+          return m ? [{ file: m[1], content: m[2].trim() }] : [];
+        });
+      }
+      // Case 2: concatenated — anchor the lookahead on the installation base path
+      // so values containing paths (S3 URLs, conf paths) don't cause early splits.
+      const lineRe = new RegExp(`(\\S+\\.conf)\\s{2,}(.*?)(?=${escapedBase}\\/|$)`, "gs");
+      return [...rawStr.matchAll(lineRe)].map(m => ({ file: m[1], content: m[2].trim() }));
+    }
+
     const out: BtoolRow[] = [];
     let currentStanza = "";
     for (const row of results) {
       const rawStr = String(row._raw ?? "").trim();
       if (!rawStr.startsWith("/")) continue;
-      // Extract each btool line: path ending in .conf, 2+ spaces, then content.
-      // Anchor the lookahead on /opt/splunk/ so S3 URLs like s3://bucket/prefix/
-      // don't trigger a false split (the generic \S+\.conf lookahead would match
-      // across the URL into the next line's path).
-      const lineRe = /(\S+\.conf)\s{2,}(.*?)(?=\/opt\/splunk\/|$)/gs;
-      const lineMatches = [...rawStr.matchAll(lineRe)];
-      if (!lineMatches.length) continue;
-      for (const lm of lineMatches) {
-        const file    = lm[1];
-        const content = lm[2].trim();
+      for (const { file, content } of splitRaw(rawStr)) {
         const isStanza = /^\[.+\]$/.test(content);
         if (isStanza) currentStanza = content.slice(1, -1);
         if (currentStanza !== "replicationSettings") continue;
