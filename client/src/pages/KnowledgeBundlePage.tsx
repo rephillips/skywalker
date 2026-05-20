@@ -8,7 +8,7 @@ interface BundleInfo {
   [key: string]: any;
 }
 
-const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local | where stanza="replicationSettings" | table key, value`;
+const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local`;
 
 const POLICY_DESCRIPTIONS: Record<string, string> = {
   replication:    "Full replication — entire bundle pushed to all SHC members",
@@ -17,7 +17,8 @@ const POLICY_DESCRIPTIONS: Record<string, string> = {
 };
 
 function ReplicationSettingsPanel() {
-  const [settings, setSettings] = useState<{ key: string; value: string }[]>([]);
+  const [settings, setSettings] = useState<{ key: string; value: string; _raw: any }[]>([]);
+  const [showRaw, setShowRaw] = useState(false);
   const [captain, setCaptain] = useState<string | null>(null);
   const [currentSh, setCurrentSh] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +35,27 @@ function ReplicationSettingsPanel() {
       ]);
 
       if (btoolRes.results?.length > 0) {
-        const rows = btoolRes.results.map((r: any) => ({ key: r.key as string, value: r.value as string }));
-        // replicationPolicy first, rest alphabetical
+        const raw = btoolRes.results;
+        // Try common field name patterns for btool output
+        const firstRow = raw[0];
+        const keyField   = "key"       in firstRow ? "key"       : "attribute" in firstRow ? "attribute" : Object.keys(firstRow).find(k => !k.startsWith("_")) ?? "key";
+        const valueField = "value"     in firstRow ? "value"     : Object.keys(firstRow).find(k => k !== keyField && !k.startsWith("_")) ?? "value";
+        const stanzaField = "stanza"   in firstRow ? "stanza"    : null;
+
+        // Filter to [replicationSettings] only — try both with and without brackets
+        const filtered = stanzaField
+          ? raw.filter((r: any) => {
+              const s = String(r[stanzaField] ?? "");
+              return s === "replicationSettings" || s === "[replicationSettings]";
+            })
+          : raw;
+
+        const rows = (filtered.length > 0 ? filtered : raw).map((r: any) => ({
+          key:   String(r[keyField]   ?? ""),
+          value: String(r[valueField] ?? ""),
+          _raw:  r,
+        }));
+
         rows.sort((a: any, b: any) => {
           if (a.key === "replicationPolicy") return -1;
           if (b.key === "replicationPolicy") return 1;
@@ -94,6 +114,11 @@ function ReplicationSettingsPanel() {
               </span>
             )}
           </div>
+          {settings.length > 0 && (
+            <button onClick={() => setShowRaw(s => !s)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+              {showRaw ? "Hide raw" : "Show raw"}
+            </button>
+          )}
           <button onClick={load} disabled={loading}
             className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
             {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
@@ -144,6 +169,15 @@ function ReplicationSettingsPanel() {
                 </div>
               ))}
           </div>
+
+          {/* Raw output for debugging */}
+          {showRaw && (
+            <div className="border-t border-surface-border p-3">
+              <pre className="text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all max-h-64 overflow-auto bg-surface rounded p-2">
+                {JSON.stringify(settings.map(s => s._raw), null, 2)}
+              </pre>
+            </div>
+          )}
 
           {/* SPL reference */}
           <div className="px-4 py-2 border-t border-surface-border bg-surface/30">
