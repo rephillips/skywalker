@@ -117,7 +117,7 @@ Track `currentStanza` sequentially across lines so sub-stanzas like `[replicatio
 - **Body**: full-width, two-column monospace layout — left column is the file path (fixed width, `shrink-0`), right column is `attribute = value` or `[stanza]`. Use `whitespace-nowrap` on each row and `overflow-x-auto` on the container.
 - **Stanza name row** (`[stanzaName]`): render in `text-emerald-400/80` to distinguish it from attribute rows.
 - **Stanza header rows** (`[stanzaName]`) appear in the results and are rendered inline with their source file path.
-- **Expand/collapse**: show the first 20 rows (`PREVIEW_ROWS = 20`) per stanza group; add a "Show N more / Collapse" toggle.
+- **Expand/collapse**: show the first 25 rows (`PREVIEW_ROWS = 25`) per stanza group; add a "Show N more / Collapse" toggle.
 - **SPL reference**: show the raw SPL string at the bottom of the card in a monospace dimmed style.
 - **Show raw toggle**: optional debug table showing all fields including `_raw` — useful when diagnosing parse issues.
 
