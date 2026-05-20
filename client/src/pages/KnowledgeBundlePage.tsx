@@ -8,7 +8,7 @@ interface BundleInfo {
   [key: string]: any;
 }
 
-const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local | where 'BTOOL.CMD.PREFIX'="replicationSettings"`;
+const BTOOL_SPL = `| btool distsearch list replicationSettings splunk_server=local`;
 
 const POLICY_DESCRIPTIONS: Record<string, string> = {
   replication:    "Full replication — entire bundle pushed to all SHC members",
