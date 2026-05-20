@@ -200,7 +200,7 @@ function SshPanel() {
 export function SshPage() {
   return (
     <div className="flex-1 flex flex-col">
-      <TopBar title="SSH" />
+      <TopBar title="SSH" hideTimePicker />
       <div className="p-6 max-w-3xl">
         <SshPanel />
       </div>
