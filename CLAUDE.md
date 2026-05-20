@@ -78,6 +78,10 @@ React Router mounts and unmounts page components as the user navigates. A `useEf
 
 Add to an existing router in `server/src/routes/` or create a new one and register it in `server/src/index.ts` under `/api`.
 
+## Command styling
+
+Any Splunk SPL query or CLI command (P0 ssh, P0 scp, P0 login, btool, etc.) displayed in the UI must use `text-emerald-300` (inline commands in cards/rows) or `text-emerald-400/60` (dimmed subtext in headers). Never use gray or blue for runnable commands.
+
 ## Btool panels
 
 When asked to display btool output for a `<file>` and `<stanza>`, build a self-contained panel component using this established pattern (see `ReplicationSettingsPanel` in `client/src/pages/KnowledgeBundlePage.tsx`).
