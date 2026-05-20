@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { AreaChart } from "@tremor/react";
+import { ResponsiveContainer, ComposedChart, Bar, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
 import { RefreshCw, Loader2, CalendarClock, AlertTriangle, CheckCircle, Zap, Wrench, Check, X, Bug, ChevronUp, ChevronDown, ChevronRight, ChevronsUpDown, Layers, FileDown, Mail, Play, Activity } from "lucide-react";
 import clsx from "clsx";
 import { TopBar } from "../components/layout/TopBar";
@@ -650,12 +650,12 @@ export function ScheduledSearchesPage() {
       const res = await api.search(spl, "-1h@m", "now");
       const rows = res.results || [];
       const chartRows = rows.map((r: any) => {
-        const point: Record<string, string | number> = {};
         const t = r["_time"];
-        if (t) {
-          const d = new Date(t);
-          point["Time"] = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        }
+        const d = t ? new Date(t) : null;
+        const point: Record<string, string | number> = {
+          label: d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "",
+          datetime: d ? d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
+        };
         const scheduled = Number(r["Searches Scheduled"]);
         const limit = Number(r["Max Concurrent Limit"]);
         if (!isNaN(scheduled)) point["Searches Scheduled"] = scheduled;
@@ -1515,44 +1515,28 @@ export function ScheduledSearchesPage() {
                   <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">SPL Query</span>
                   <div className="flex items-center gap-2">
                     <CopyButton text={concurrencySpl} />
-                    <button
-                      onClick={() => setEditConcurrencySpl((v) => !v)}
-                      className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors"
-                    >
+                    <button onClick={() => setEditConcurrencySpl((v) => !v)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
                       {editConcurrencySpl ? "Cancel" : "Edit"}
                     </button>
                   </div>
                 </div>
                 {editConcurrencySpl ? (
                   <div className="flex flex-col gap-2">
-                    <textarea
-                      value={concurrencySpl}
-                      onChange={(e) => setConcurrencySpl(e.target.value)}
-                      rows={7}
-                      className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y"
-                      spellCheck={false}
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => { fetchConcurrency(concurrencySpl); setEditConcurrencySpl(false); }}
-                        className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors"
-                      >
-                        <Play size={10} /> Run
-                      </button>
-                    </div>
+                    <textarea value={concurrencySpl} onChange={(e) => setConcurrencySpl(e.target.value)} rows={7}
+                      className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-100 font-mono outline-none focus:border-brand-500 resize-y" spellCheck={false} />
+                    <button onClick={() => { fetchConcurrency(concurrencySpl); setEditConcurrencySpl(false); }}
+                      className="self-start flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[10px] font-medium text-white hover:bg-brand-600 transition-colors">
+                      <Play size={10} /> Run
+                    </button>
                   </div>
                 ) : (
                   <pre className="text-[11px] font-mono text-emerald-400/80 whitespace-pre-wrap break-all">{concurrencySpl}</pre>
                 )}
               </div>
 
-              {/* Run button */}
               {!editConcurrencySpl && (
-                <button
-                  onClick={() => fetchConcurrency(concurrencySpl)}
-                  disabled={concurrencyLoading}
-                  className="mb-3 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50"
-                >
+                <button onClick={() => fetchConcurrency(concurrencySpl)} disabled={concurrencyLoading}
+                  className="mb-4 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 transition-colors disabled:opacity-50">
                   {concurrencyLoading ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
                   {concurrencyLoading ? "Running…" : "Run"}
                 </button>
@@ -1561,22 +1545,68 @@ export function ScheduledSearchesPage() {
               {concurrencyError && <div className="mb-3"><ErrorAlert message={concurrencyError} /></div>}
 
               {concurrencyData.length > 0 && (() => {
-                const categories = ["Searches Scheduled", "Max Concurrent Limit"].filter(
-                  (k) => concurrencyData.some((r) => r[k] !== undefined)
-                );
+                const limitVal = concurrencyData.find((r) => r["Max Concurrent Limit"] !== undefined)?.["Max Concurrent Limit"] as number | undefined;
+                // X-axis: show a label every ~10 ticks to avoid crowding
+                const step = Math.max(1, Math.floor(concurrencyData.length / 8));
                 return (
-                  <div className="rounded-lg border border-surface-border bg-surface p-3">
-                    <AreaChart
-                      data={concurrencyData}
-                      index="Time"
-                      categories={categories}
-                      colors={["cyan", "rose"]}
-                      yAxisWidth={40}
-                      showAnimation
-                      showLegend
-                      showGridLines
-                      style={{ height: 260 }}
-                    />
+                  <div style={{ width: "100%", height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={concurrencyData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }} barCategoryGap="20%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fill: "#64748b", fontSize: 11 }}
+                          axisLine={{ stroke: "#334155" }}
+                          tickLine={false}
+                          interval={step - 1}
+                        />
+                        <YAxis
+                          tick={{ fill: "#64748b", fontSize: 11 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={36}
+                          allowDecimals={false}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "rgba(100,116,139,0.1)" }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const row = payload[0]?.payload;
+                            const scheduled = row?.["Searches Scheduled"] ?? 0;
+                            return (
+                              <div className="rounded-lg border border-surface-border bg-surface px-3 py-2 shadow-xl text-xs">
+                                <div className="text-gray-400 mb-1 font-mono">{row?.datetime}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-cyan-400" />
+                                  <span className="text-gray-300">Searches Scheduled:</span>
+                                  <span className="font-bold text-cyan-300">{scheduled}</span>
+                                </div>
+                                {limitVal !== undefined && (
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="inline-block w-2.5 h-0.5 bg-rose-400" />
+                                    <span className="text-gray-300">Max Concurrent Limit:</span>
+                                    <span className="font-bold text-rose-300">{limitVal}</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }}
+                        />
+                        <Legend
+                          wrapperStyle={{ fontSize: 11, color: "#94a3b8", paddingTop: 8 }}
+                          formatter={(value) => <span style={{ color: "#94a3b8" }}>{value}</span>}
+                        />
+                        <Bar dataKey="Searches Scheduled" fill="#22d3ee" radius={[2, 2, 0, 0]} maxBarSize={32} />
+                        {limitVal !== undefined && (
+                          <ReferenceLine
+                            y={limitVal}
+                            stroke="#f87171"
+                            strokeWidth={2}
+                            label={{ value: `Limit: ${limitVal}`, position: "insideTopRight", fill: "#f87171", fontSize: 11 }}
+                          />
+                        )}
+                      </ComposedChart>
+                    </ResponsiveContainer>
                   </div>
                 );
               })()}
