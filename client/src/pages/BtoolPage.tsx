@@ -564,11 +564,10 @@ export function BtoolPage() {
             </div>
           )}
 
-          {!loading && rawResults.length === 0 && !error && (
+          {cmdType !== "bundlefiles" && !loading && rawResults.length === 0 && !error && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 rounded-xl border border-emerald-500/10 bg-surface-raised">
               <Terminal size={32} className="text-gray-700" />
-              <p className="text-sm text-gray-500">Build a command and hit Run</p>
-              <p className="text-[11px] text-gray-600">Or click an example in the reference panel →</p>
+              <p className="text-[11px] text-gray-600">Build a command and hit Run, or click an example in the reference panel</p>
             </div>
           )}
         </div>

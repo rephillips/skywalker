@@ -185,11 +185,15 @@ export function BundleFilesPanel() {
                 </table>
               </div>
               <div className="px-4 py-2 flex items-center justify-between text-[10px] text-gray-600 shrink-0">
-                <span>{filesExpanded ? sorted.length : Math.min(FILE_PREVIEW, sorted.length)} of {sorted.length} files</span>
+                <span>
+                  {filesExpanded
+                    ? `${sorted.length} files`
+                    : `Top ${Math.min(FILE_PREVIEW, sorted.length)} of ${sorted.length} files by size`}
+                </span>
                 {sorted.length > FILE_PREVIEW && (
                   <button onClick={() => setFilesExpanded(e => !e)}
                     className="text-brand-400 hover:text-brand-200 transition-colors">
-                    {filesExpanded ? "Collapse" : `Show ${sorted.length - FILE_PREVIEW} more`}
+                    {filesExpanded ? "Collapse" : `Show all ${sorted.length} files`}
                   </button>
                 )}
               </div>
