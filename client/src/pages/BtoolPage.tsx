@@ -262,9 +262,9 @@ export function BtoolPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden">
       <TopBar title="Btool" hideTimePicker />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* ── Left: Reference ── */}
         <div className="w-72 shrink-0 border-r border-surface-border flex flex-col overflow-hidden">
@@ -295,7 +295,7 @@ export function BtoolPage() {
         </div>
 
         {/* ── Right: Builder + Results ── */}
-        <div className="flex-1 flex flex-col overflow-hidden p-5 gap-4 min-w-0">
+        <div className="flex-1 flex flex-col overflow-hidden px-4 py-3 gap-3 min-w-0">
 
           {/* Builder card */}
           <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden shrink-0">
