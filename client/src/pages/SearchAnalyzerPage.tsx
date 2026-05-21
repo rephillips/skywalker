@@ -7,7 +7,7 @@ import { JobInspector } from "../components/panels/JobInspector";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "inspector" | "log" | "audit";
+type Tab = "inspector" | "log" | "audit" | "indexers";
 
 // ─── Log viewer ───────────────────────────────────────────────────────────────
 
@@ -69,8 +69,9 @@ export function SearchAnalyzerPage() {
   const [error, setError]     = useState<string | null>(null);
   const [log, setLog]           = useState<string | null>(null);
   const [hasJob, setHasJob]     = useState(false);
-  const [auditRows, setAuditRows] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<Tab>("inspector");
+  const [auditRows, setAuditRows]     = useState<any[]>([]);
+  const [indexerRows, setIndexerRows] = useState<any[]>([]);
+  const [activeTab, setActiveTab]     = useState<Tab>("inspector");
 
   const analyze = useCallback(async () => {
     const trimmed = input.trim();
@@ -80,15 +81,18 @@ export function SearchAnalyzerPage() {
     setLog(null);
     setHasJob(false);
     setAuditRows([]);
+    setIndexerRows([]);
     setSid("");
 
-    const auditSpl = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='${trimmed}'`;
+    const auditSpl   = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='${trimmed}'`;
+    const indexerSpl = `index=_internal source=*remote_searches.log host IN (idx-i-*) *${trimmed}* | stats max(elapsedTime) as elapsedTime by host`;
 
     try {
-      const [logResult, jobResult, auditResult] = await Promise.allSettled([
+      const [logResult, jobResult, auditResult, indexerResult] = await Promise.allSettled([
         api.searchLog(trimmed),
         api.proxy("search/v2/jobs/" + encodeURIComponent(trimmed)),
         api.search(auditSpl),
+        api.search(indexerSpl),
       ]);
 
       let gotSomething = false;
@@ -111,6 +115,12 @@ export function SearchAnalyzerPage() {
       if (auditResult.status === "fulfilled") {
         const rows = auditResult.value?.results ?? [];
         setAuditRows(rows);
+        if (rows.length > 0) gotSomething = true;
+      }
+
+      if (indexerResult.status === "fulfilled") {
+        const rows = indexerResult.value?.results ?? [];
+        setIndexerRows(rows);
         if (rows.length > 0) gotSomething = true;
       }
 
@@ -138,7 +148,8 @@ export function SearchAnalyzerPage() {
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "inspector", label: "Job Inspector" },
     { id: "log",       label: "search.log" },
-    { id: "audit",     label: "Audit Trail", badge: auditRows.length },
+    { id: "audit",     label: "Audit Trail",    badge: auditRows.length },
+    { id: "indexers",  label: "Indexer Times",  badge: indexerRows.length },
   ];
 
   return (
@@ -289,6 +300,56 @@ export function SearchAnalyzerPage() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "indexers" && (
+                <div className="overflow-auto h-full">
+                  {indexerRows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-[11px] text-gray-500">
+                      <p>No indexer timing data found.</p>
+                      <code className="text-[10px] font-mono text-emerald-400/60 px-3 py-1.5 rounded bg-surface border border-surface-border">
+                        index=_internal source=*remote_searches.log host IN (idx-i-*) *{sid}*
+                      </code>
+                    </div>
+                  ) : (
+                    <div className="p-4">
+                      <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden">
+                        <div className="px-4 py-2 border-b border-surface-border flex items-center justify-between">
+                          <span className="text-[11px] text-gray-400">{indexerRows.length} indexer{indexerRows.length !== 1 ? "s" : ""}</span>
+                          <code className="text-[10px] font-mono text-emerald-400/60">max(elapsedTime) by host</code>
+                        </div>
+                        <table className="w-full text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-surface-border text-[9px] uppercase tracking-wide text-gray-500">
+                              <th className="text-left px-4 py-2 font-medium">Host</th>
+                              <th className="text-right px-4 py-2 font-medium w-36">Elapsed Time (s)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...indexerRows]
+                              .sort((a, b) => Number(b.elapsedTime) - Number(a.elapsedTime))
+                              .map((row, i) => {
+                                const max = Math.max(...indexerRows.map(r => Number(r.elapsedTime) || 0));
+                                const pct = max > 0 ? (Number(row.elapsedTime) / max) * 100 : 0;
+                                return (
+                                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                                    <td className="px-4 py-2 font-mono text-gray-200">{row.host}</td>
+                                    <td className="px-4 py-2 text-right relative">
+                                      <div className="absolute inset-y-0 right-0 bg-emerald-500/10"
+                                        style={{ width: `${pct}%` }} />
+                                      <span className={`relative font-mono ${pct === 100 ? "text-amber-400" : "text-gray-300"}`}>
+                                        {Number(row.elapsedTime).toFixed(3)}s
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
