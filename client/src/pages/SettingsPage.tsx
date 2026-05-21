@@ -21,8 +21,10 @@ export function SettingsPage() {
   const [envConfig, setEnvConfig] = useState<SplunkConfig | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "error" | "warning"; text: string } | null>(null);
 
+  const noCache = { "Cache-Control": "no-store, no-cache", "Pragma": "no-cache" };
+
   useEffect(() => {
-    fetch("/api/config")
+    fetch("/api/config", { headers: noCache })
       .then((r) => r.json())
       .then((cfg: SplunkConfig) => {
         setBaseUrl(cfg.baseUrl);
@@ -47,7 +49,7 @@ export function SettingsPage() {
       });
       const data = await res.json();
       setMessage({ type: data.status, text: data.message });
-      const updated = await fetch("/api/config").then((r) => r.json());
+      const updated = await fetch("/api/config", { headers: noCache }).then((r) => r.json());
       setEnvConfig(updated);
       window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
@@ -84,7 +86,7 @@ export function SettingsPage() {
         body: JSON.stringify({ baseUrl, token: "" }),
       });
       setToken("");
-      const updated = await fetch("/api/config").then((r) => r.json());
+      const updated = await fetch("/api/config", { headers: noCache }).then((r) => r.json());
       setEnvConfig(updated);
       setMessage({ type: "ok", text: "Token cleared from memory" });
       window.dispatchEvent(new Event("skywalker-connection-changed"));

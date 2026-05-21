@@ -6,6 +6,10 @@ const router = Router();
 
 // Get current config (masks sensitive fields)
 router.get("/config", (_req, res) => {
+  // Never let the browser or any proxy cache auth state
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
+
   // Derive web URL from base URL if not set (replace port 8089 with 8000)
   const webUrl = config.splunk.webUrl || config.splunk.baseUrl.replace(/:8089\b/, ":8000").replace(/^https/, "http");
   res.json({

@@ -105,9 +105,10 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
   useEffect(() => {
     async function autoCheck() {
       try {
+        const noCache = { "Cache-Control": "no-store, no-cache", "Pragma": "no-cache" };
         const [cfg, test] = await Promise.all([
-          fetch("/api/config").then((r) => r.json()),
-          fetch("/api/config/test", { method: "POST" }).then((r) => r.json()),
+          fetch("/api/config", { headers: noCache }).then((r) => r.json()),
+          fetch("/api/config/test", { method: "POST", headers: noCache }).then((r) => r.json()),
         ]);
         if (cfg.baseUrl && !cfg.baseUrl.includes("127.0.0.1")) {
           setBaseUrl(cfg.baseUrl);
