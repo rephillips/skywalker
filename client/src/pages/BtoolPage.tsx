@@ -83,13 +83,13 @@ type CmdType = "list" | "layer" | "bundlefiles";
 interface BuilderOpts {
   confname: string; stanza: string; debug: boolean; app: string;
   allapps: boolean; kvpairs: boolean; user: string; splunkServer: string;
-  sourcetype: string; source: string; bundleType: string;
+  sourcetype: string; source: string;
 }
 
 const DEFAULT_OPTS: BuilderOpts = {
   confname: "distsearch", stanza: "", debug: false, app: "",
   allapps: false, kvpairs: false, user: "", splunkServer: "local",
-  sourcetype: "", source: "", bundleType: "",
+  sourcetype: "", source: "",
 };
 
 function buildSpl(type: CmdType, o: BuilderOpts): string {
@@ -113,11 +113,8 @@ function buildSpl(type: CmdType, o: BuilderOpts): string {
       p.push(`splunk_server=${o.splunkServer || "local"}`);
       return p.join(" ");
     }
-    case "bundlefiles": {
-      const p = ["| bundlefiles"];
-      if (o.bundleType) p.push(`bundle=${o.bundleType}`);
-      return p.join(" ");
-    }
+    case "bundlefiles":
+      return "| bundlefiles";
   }
 }
 
@@ -389,17 +386,6 @@ export function BtoolPage() {
                   </div>
                 </>)}
 
-{cmdType === "bundlefiles" && (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase tracking-wide text-gray-500">Bundle type</label>
-                    <select value={opts.bundleType} onChange={e => set("bundleType", e.target.value)}
-                      className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60">
-                      <option value="">default</option>
-                      <option value="computed">computed</option>
-                      <option value="computed_exclusions">computed_exclusions</option>
-                    </select>
-                  </div>
-                )}
               </div>
 
               {/* Toggles */}
