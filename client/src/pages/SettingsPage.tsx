@@ -19,19 +19,33 @@ export function SettingsPage() {
   const [testing, setTesting] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [envConfig, setEnvConfig] = useState<SplunkConfig | null>(null);
+  const [splunkReachable, setSplunkReachable] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error" | "warning"; text: string } | null>(null);
 
   const noCache = { "Cache-Control": "no-store, no-cache", "Pragma": "no-cache" };
 
+  const checkConnection = async () => {
+    try {
+      const cfg: SplunkConfig = await fetch("/api/config", { headers: noCache }).then(r => r.json());
+      setBaseUrl(cfg.baseUrl);
+      setEnvConfig(cfg);
+      if (cfg.hasToken || cfg.hasPassword) {
+        const health = await fetch("/api/health", { headers: noCache }).then(r => r.json());
+        setSplunkReachable(health.splunk === "reachable");
+      } else {
+        setSplunkReachable(false);
+      }
+    } catch {
+      setSplunkReachable(false);
+    } finally {
+      setLoaded(true);
+    }
+  };
+
   useEffect(() => {
-    fetch("/api/config", { headers: noCache })
-      .then((r) => r.json())
-      .then((cfg: SplunkConfig) => {
-        setBaseUrl(cfg.baseUrl);
-        setEnvConfig(cfg);
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
+    checkConnection();
+    window.addEventListener("skywalker-connection-changed", checkConnection);
+    return () => window.removeEventListener("skywalker-connection-changed", checkConnection);
   }, []);
 
   async function handleConnect() {
@@ -49,8 +63,7 @@ export function SettingsPage() {
       });
       const data = await res.json();
       setMessage({ type: data.status, text: data.message });
-      const updated = await fetch("/api/config", { headers: noCache }).then((r) => r.json());
-      setEnvConfig(updated);
+      await checkConnection();
       window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
       setMessage({ type: "error", text: (err as Error).message });
@@ -86,8 +99,7 @@ export function SettingsPage() {
         body: JSON.stringify({ baseUrl, token: "" }),
       });
       setToken("");
-      const updated = await fetch("/api/config", { headers: noCache }).then((r) => r.json());
-      setEnvConfig(updated);
+      await checkConnection();
       setMessage({ type: "ok", text: "Token cleared from memory" });
       window.dispatchEvent(new Event("skywalker-connection-changed"));
     } catch (err) {
@@ -97,7 +109,8 @@ export function SettingsPage() {
 
   if (!loaded) return null;
 
-  const isConnected = envConfig?.hasToken || envConfig?.hasPassword;
+  const hasCredentials = !!(envConfig?.hasToken || envConfig?.hasPassword);
+  const isConnected = hasCredentials && splunkReachable;
 
   return (
     <div className="flex-1 flex flex-col">
