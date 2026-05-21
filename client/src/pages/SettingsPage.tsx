@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { TopBar } from "../components/layout/TopBar";
-import { CheckCircle, XCircle, Loader2, Plug, Info, Shield, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Plug, Info, Shield, AlertTriangle, Database, Trash2 } from "lucide-react";
+import { queryCache, DEFAULT_CACHE_TTL } from "../services/cache";
 
 interface SplunkConfig {
   baseUrl: string;
@@ -238,7 +239,92 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Query cache */}
+        <CachePanel />
       </div>
+    </div>
+  );
+}
+
+function CachePanel() {
+  const [snapshot, setSnapshot] = useState(() => queryCache.snapshot());
+
+  const refresh = () => setSnapshot(queryCache.snapshot());
+
+  const clearAll = () => {
+    queryCache.clear();
+    refresh();
+  };
+
+  const ttlMins = DEFAULT_CACHE_TTL / 60_000;
+  const now = Date.now();
+
+  return (
+    <div className="rounded-xl border border-surface-border bg-surface-raised p-5 mt-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Database size={14} className="text-brand-400" />
+          <h3 className="text-sm font-semibold text-white">Query Cache</h3>
+          <span className="rounded-full bg-brand-500/20 text-brand-300 text-[9px] px-1.5 py-0.5 leading-none font-medium">
+            {snapshot.length} entr{snapshot.length === 1 ? "y" : "ies"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh}
+            className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
+            Refresh
+          </button>
+          <button
+            onClick={clearAll}
+            disabled={snapshot.length === 0}
+            className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+          >
+            <Trash2 size={10} />
+            Clear all
+          </button>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-gray-500 mb-3">
+        Splunk query results are cached in browser memory for {ttlMins} minutes. Navigating between pages
+        reuses cached results instead of re-running searches. Each page's Refresh button busts its own entries.
+        Results are never written to disk and are cleared on tab close or server restart.
+      </p>
+
+      {snapshot.length === 0 ? (
+        <p className="text-[11px] text-gray-600 italic">No cached entries.</p>
+      ) : (
+        <div className="overflow-auto max-h-56">
+          <table className="w-full text-[10px] border-collapse">
+            <thead>
+              <tr className="border-b border-surface-border text-[9px] uppercase tracking-wide text-gray-500">
+                <th className="text-left px-2 py-1.5 font-medium">Query key</th>
+                <th className="text-right px-2 py-1.5 font-medium w-32 whitespace-nowrap">Cached at</th>
+                <th className="text-right px-2 py-1.5 font-medium w-24 whitespace-nowrap">Expires in</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshot.map((e, i) => {
+                const secsLeft = Math.max(0, Math.round((e.expiresAt - now) / 1000));
+                const minsLeft = Math.floor(secsLeft / 60);
+                const secsPart = secsLeft % 60;
+                return (
+                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                    <td className="px-2 py-1 font-mono text-gray-400 break-all">{e.key}</td>
+                    <td className="px-2 py-1 font-mono text-gray-500 text-right whitespace-nowrap">
+                      {e.cachedAt.toLocaleTimeString()}
+                    </td>
+                    <td className={`px-2 py-1 font-mono text-right whitespace-nowrap ${secsLeft < 60 ? "text-amber-400" : "text-gray-500"}`}>
+                      {minsLeft > 0 ? `${minsLeft}m ${secsPart}s` : `${secsLeft}s`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
