@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Client (Vite)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd client && npm install && ./node_modules/.bin/vite --port 5173"],
+      "port": 5173
+    },
+    {
+      "name": "Server (Express)",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd server && npm install --prefer-offline 2>/dev/null; npx tsx watch src/index.ts"],
+      "port": 3001
+    }
+  ]
+}
