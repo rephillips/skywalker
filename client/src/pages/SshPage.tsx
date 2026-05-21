@@ -149,6 +149,15 @@ function SshPanel() {
             </div>
           )}
 
+          <div className="border-t border-surface-border pt-4">
+            <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-2">Once logged in</div>
+            <div className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 border border-surface-border/50">
+              <span className="text-[10px] text-gray-500 shrink-0">1.</span>
+              <code className="flex-1 text-[11px] font-mono text-emerald-300">sudo su - splunk</code>
+              <CopyButton text="sudo su - splunk" size={13} />
+            </div>
+          </div>
+
           <div className="border-t border-surface-border pt-4 space-y-3">
             <div className="text-[9px] uppercase tracking-wide text-gray-500">SCP via P0</div>
             <div className="space-y-3">
