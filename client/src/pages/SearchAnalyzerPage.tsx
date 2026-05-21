@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Search, Loader2, Filter, Copy, Check, Play } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -18,18 +18,71 @@ function logLineClass(line: string): string {
   return "text-gray-500";
 }
 
-function SearchLogTab({ log }: { log: string }) {
-  const [filter, setFilter] = useState("");
+/** Parse Splunk search.log timestamp: MM-DD-YYYY HH:MM:SS.mmm ±HHMM */
+function parseLogTimestamp(line: string): number | null {
+  const m = line.match(/^(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})\.(\d+) ([+-])(\d{2})(\d{2})/);
+  if (!m) return null;
+  const [, mm, dd, yyyy, HH, MM, SS, frac, tzSign, tzHH, tzMM] = m;
+  const ms = frac.slice(0, 3).padEnd(3, "0");
+  const iso = `${yyyy}-${mm}-${dd}T${HH}:${MM}:${SS}.${ms}${tzSign}${tzHH}:${tzMM}`;
+  const t = new Date(iso).getTime();
+  return isNaN(t) ? null : t;
+}
 
-  const lines = log.split("\n");
-  const filtered = filter
-    ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase()))
-    : lines;
+type LogItem =
+  | { type: "line"; text: string }
+  | { type: "gap";  ms: number; gapIdx: number };
+
+function SearchLogTab({ log }: { log: string }) {
+  const [filter, setFilter]         = useState("");
+  const [gapThreshold, setGapThreshold] = useState("1");
+  const [gapNav, setGapNav]         = useState(0);
+  const gapRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const lines = useMemo(() => log.split("\n"), [log]);
+
+  const filtered = useMemo(() =>
+    filter ? lines.filter(l => l.toLowerCase().includes(filter.toLowerCase())) : lines,
+    [lines, filter]
+  );
+
+  const threshMs = useMemo(() => {
+    const v = parseFloat(gapThreshold);
+    return isNaN(v) || v <= 0 ? null : v * 1000;
+  }, [gapThreshold]);
+
+  const { items, gapCount } = useMemo(() => {
+    const items: LogItem[] = [];
+    let lastTs: number | null = null;
+    let gapCount = 0;
+    for (const line of filtered) {
+      const ts = parseLogTimestamp(line);
+      if (threshMs !== null && ts !== null && lastTs !== null) {
+        const delta = ts - lastTs;
+        if (delta > threshMs) items.push({ type: "gap", ms: delta, gapIdx: gapCount++ });
+      }
+      items.push({ type: "line", text: line });
+      if (ts !== null) lastTs = ts;
+    }
+    return { items, gapCount };
+  }, [filtered, threshMs]);
+
+  // Reset navigator when gap list changes
+  useEffect(() => { setGapNav(0); gapRefs.current = []; }, [gapCount]);
+
+  const jumpToGap = (dir: 1 | -1) => {
+    const next = Math.max(0, Math.min(gapCount - 1, gapNav + dir));
+    setGapNav(next);
+    gapRefs.current[next]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
+
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-surface-border shrink-0">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-2 px-4 py-2 border-b border-surface-border shrink-0">
+
+        {/* Text filter */}
         <div className="relative">
           <Filter size={11} className="absolute left-2.5 top-[7px] text-gray-500" />
           <input
@@ -43,17 +96,71 @@ function SearchLogTab({ log }: { log: string }) {
         <span className="text-[10px] text-gray-600">
           {filtered.length} / {lines.length} lines
         </span>
+
+        {/* Gap detector */}
+        <div className="flex items-center gap-2 pl-3 border-l border-surface-border">
+          <span className="text-[10px] text-gray-500 whitespace-nowrap">Gap &gt;</span>
+          <input
+            type="number"
+            value={gapThreshold}
+            onChange={e => setGapThreshold(e.target.value)}
+            min="0"
+            step="0.1"
+            className="rounded-lg border border-surface-border bg-surface px-2 py-1 text-[11px] font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-20"
+          />
+          <span className="text-[10px] text-gray-500">s</span>
+
+          {threshMs !== null && gapCount === 0 && (
+            <span className="text-[10px] text-gray-600">no gaps found</span>
+          )}
+
+          {gapCount > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-full bg-amber-500/20 text-amber-400 text-[9px] px-1.5 py-0.5 leading-none font-medium">
+                {gapCount} gap{gapCount !== 1 ? "s" : ""}
+              </span>
+              <button
+                onClick={() => jumpToGap(-1)}
+                disabled={gapNav === 0}
+                title="Previous gap"
+                className="text-[11px] text-gray-400 hover:text-gray-200 disabled:opacity-30 px-0.5 leading-none"
+              >↑</button>
+              <span className="text-[10px] text-gray-500 tabular-nums">{gapNav + 1}/{gapCount}</span>
+              <button
+                onClick={() => jumpToGap(1)}
+                disabled={gapNav >= gapCount - 1}
+                title="Next gap"
+                className="text-[11px] text-gray-400 hover:text-gray-200 disabled:opacity-30 px-0.5 leading-none"
+              >↓</button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Log content */}
-      <div className="flex-1 overflow-auto p-4 min-h-0">
-        <pre className="text-[11px] font-mono leading-5 whitespace-pre-wrap break-all">
-          {filtered.map((line, i) => (
-            <span key={i} className={logLineClass(line)}>
-              {line}{"\n"}
-            </span>
-          ))}
-        </pre>
+      <div className="flex-1 overflow-auto p-4 min-h-0 font-mono text-[11px] leading-5">
+        {items.map((item, i) => {
+          if (item.type === "gap") {
+            return (
+              <div
+                key={`gap-${item.gapIdx}`}
+                ref={el => { gapRefs.current[item.gapIdx] = el; }}
+                className="flex items-center gap-2 my-1 -mx-4 px-4 py-1 bg-amber-500/10 border-y border-amber-500/30"
+              >
+                <span className="text-amber-400 text-[11px]">⚠</span>
+                <span className="text-amber-300 text-[10px] font-semibold tracking-wide">
+                  {(item.ms / 1000).toFixed(3)}s gap
+                </span>
+                <div className="flex-1 h-px bg-amber-500/20" />
+              </div>
+            );
+          }
+          return (
+            <div key={i} className={`whitespace-pre-wrap break-all ${logLineClass(item.text)}`}>
+              {item.text || " "}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -164,7 +271,6 @@ export function SearchAnalyzerPage() {
       const foundSid = res.sid;
       if (!foundSid) throw new Error("Search completed but no SID returned");
       setInput(foundSid);
-      setShowAdhoc(false);
       // Trigger full analysis with the returned SID
       setTimeout(() => document.getElementById("analyze-btn")?.click(), 50);
     } catch (err) {
