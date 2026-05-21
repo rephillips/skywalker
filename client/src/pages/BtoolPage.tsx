@@ -341,16 +341,7 @@ export function BtoolPage() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {cmdType === "list" && (<>
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase tracking-wide text-gray-500">Conf file</label>
-                      {CONF_DOCS[opts.confname] && (
-                        <a href={CONF_DOCS[opts.confname]} target="_blank" rel="noreferrer"
-                          className="flex items-center gap-0.5 text-[10px] text-emerald-400/70 hover:text-emerald-300 transition-colors">
-                          <ExternalLink size={9} />
-                          <span>docs</span>
-                        </a>
-                      )}
-                    </div>
+                    <label className="text-[10px] uppercase tracking-wide text-gray-500">Conf file</label>
                     <input type="text" value={opts.confname} onChange={e => set("confname", e.target.value)}
                       placeholder="e.g. distsearch" list="conf-files"
                       className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60" />
