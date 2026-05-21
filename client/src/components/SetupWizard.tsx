@@ -98,14 +98,16 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
         body: JSON.stringify({ baseUrl, token }),
       });
       const data = await res.json();
-      if (data.status === "ok" || data.status === "warning") {
+      if (data.status === "ok") {
         setSuccessMsg(data.message || "Connected");
         setWizState("success");
         playLightsaberSwoosh();
         window.dispatchEvent(new Event("skywalker-connection-changed"));
         setTimeout(() => onConnected(), 900);
       } else {
-        setError(data.message || "Connection failed");
+        // "warning" = config saved but Splunk unreachable; "error" = hard failure
+        // Either way, stay on the form so the user can fix the URL / token.
+        setError(data.message || "Connection failed — check the URL and token");
       }
     } catch (err) {
       setError((err as Error).message);
@@ -152,7 +154,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
             <div className="flex flex-col items-center gap-3 py-6">
               <CheckCircle size={28} className="text-emerald-400" />
               <p className="text-sm text-emerald-300 font-medium">{successMsg}</p>
-              <p className="text-xs text-gray-500">Loading dashboard…</p>
+              <p className="text-xs text-gray-500">Loading…</p>
             </div>
           )}
 
