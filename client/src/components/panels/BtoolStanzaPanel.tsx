@@ -67,6 +67,7 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
 
   const [rawRows, setRawRows] = useState<any[]>([]);
   const [expanded, setExpanded] = useState(false);
+  const [showRaw, setShowRaw]   = useState(false);
   const [loading, setLoading]  = useState(true);
   const [error, setError]      = useState<string | null>(null);
 
@@ -112,6 +113,12 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
           <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{spl}</code>
         </div>
         <div className="flex items-center gap-3">
+          {!loading && rawRows.length > 0 && (
+            <button onClick={() => setShowRaw(s => !s)}
+              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+              {showRaw ? "Hide raw" : "Show raw"}
+            </button>
+          )}
           <button onClick={load} disabled={loading}
             className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
             {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
@@ -133,6 +140,13 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
         <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
           <AlertTriangle size={13} />
           No results — Admin&apos;s Little Helper app may not be installed on this SH.
+        </div>
+      )}
+
+      {!loading && !error && rawRows.length > 0 && rows.length === 0 && (
+        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
+          <AlertTriangle size={13} />
+          Stanza <code className="font-mono mx-1">[{stanza}]</code> not found in results — it may not be configured on this SH. Use "Show raw" to inspect what was returned.
         </div>
       )}
 
@@ -186,9 +200,37 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
               {descriptions[headerValue]}
             </div>
           )}
+        </>
+      )}
 
-
-</>
+      {showRaw && rawRows.length > 0 && (
+        <div className="border-t border-surface-border p-4">
+          <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
+          <div className="overflow-x-auto rounded border border-surface-border">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  {Object.keys(rawRows[0]).map(col => (
+                    <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rawRows.map((r, i) => (
+                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                    {Object.keys(rawRows[0]).map(col => (
+                      <td key={col} className="px-3 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap max-w-xs truncate">
+                        {String(r[col] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
