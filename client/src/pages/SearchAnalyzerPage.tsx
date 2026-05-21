@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Search, Loader2, Filter, Copy, Check } from "lucide-react";
+import { Search, Loader2, Filter, Copy, Check, Play, ChevronDown, ChevronUp } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -74,6 +74,10 @@ export function SearchAnalyzerPage() {
   const [activeTab, setActiveTab]     = useState<Tab>("inspector");
   const [earliest, setEarliest]       = useState("-7d");
   const [latest, setLatest]           = useState("now");
+  const [showAdhoc, setShowAdhoc]     = useState(false);
+  const [adhocSpl, setAdhocSpl]       = useState("");
+  const [adhocLoading, setAdhocLoading] = useState(false);
+  const [adhocError, setAdhocError]   = useState<string | null>(null);
 
   const analyze = useCallback(async () => {
     const trimmed = input.trim();
@@ -152,6 +156,25 @@ export function SearchAnalyzerPage() {
     }
   }, [input, earliest, latest]);
 
+  const runAdhoc = useCallback(async () => {
+    if (!adhocSpl.trim()) return;
+    setAdhocLoading(true);
+    setAdhocError(null);
+    try {
+      const res = await api.search(adhocSpl.trim(), earliest, latest);
+      const foundSid = res.sid;
+      if (!foundSid) throw new Error("Search completed but no SID returned");
+      setInput(foundSid);
+      setShowAdhoc(false);
+      // Trigger full analysis with the returned SID
+      setTimeout(() => document.getElementById("analyze-btn")?.click(), 50);
+    } catch (err) {
+      setAdhocError((err as Error).message);
+    } finally {
+      setAdhocLoading(false);
+    }
+  }, [adhocSpl, earliest, latest]);
+
   const hasResults = !!sid && (hasJob || log !== null || auditRows.length > 0 || indexerRows.length > 0);
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
@@ -203,8 +226,9 @@ export function SearchAnalyzerPage() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
+              id="analyze-btn"
               onClick={analyze}
               disabled={loading || !input.trim()}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap"
@@ -212,8 +236,43 @@ export function SearchAnalyzerPage() {
               {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
               Analyze
             </button>
+            <button
+              onClick={() => setShowAdhoc(o => !o)}
+              className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              {showAdhoc ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              Run ad-hoc search
+            </button>
           </div>
           <p className="mt-1.5 text-[10px] text-gray-600">⌘+Enter to analyze</p>
+
+          {/* Ad-hoc search */}
+          {showAdhoc && (
+            <div className="mt-3 pt-3 border-t border-surface-border flex flex-col gap-2">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">SPL Query</label>
+              <textarea
+                value={adhocSpl}
+                onChange={e => setAdhocSpl(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runAdhoc(); } }}
+                rows={3}
+                spellCheck={false}
+                placeholder="e.g. index=_internal | stats count by sourcetype"
+                className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 resize-none leading-5 placeholder:text-gray-600"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={runAdhoc}
+                  disabled={adhocLoading || !adhocSpl.trim()}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {adhocLoading ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                  Run & Analyze
+                </button>
+                <p className="text-[10px] text-gray-600">Runs the search, captures the SID, then analyzes it</p>
+              </div>
+              {adhocError && <div className="mt-1"><ErrorAlert message={adhocError} /></div>}
+            </div>
+          )}
 
           {error && (
             <div className="mt-3">
