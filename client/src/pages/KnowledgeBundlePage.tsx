@@ -398,10 +398,21 @@ const BUNDLE_SPL = `| bundlefiles
 | eval last_mod=strftime(_time, date_format)
 | table host display size bytes last_mod bundle_file timestamp checked_at total_count maxBundleSize is_summary`;
 
+type SortKey = "display" | "bytes" | "last_mod";
+type SortDir = "asc" | "desc";
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <span className="text-gray-600 ml-1">↕</span>;
+  return <span className="text-emerald-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+}
+
 function BundleFilesPanel() {
   const [rows, setRows]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [search, setSearch]   = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("bytes");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -419,20 +430,39 @@ function BundleFilesPanel() {
   useEffect(() => { load(); }, [load]);
 
   const summary = rows.find(r => r.is_summary === "1");
-  const files   = rows.filter(r => r.is_summary !== "1");
+  const allFiles = rows.filter(r => r.is_summary !== "1");
 
   const statCells = summary ? [
-    { label: "Host",          value: summary.host },
-    { label: "Checked at",   value: summary.checked_at },
-    { label: "Built",        value: summary.timestamp },
-    { label: "Bundle file",  value: summary.bundle_file },
-    { label: "File count",   value: summary.total_count },
-    { label: "Total size",   value: summary.size },
-    { label: "maxBundleSize",value: summary.maxBundleSize },
+    { label: "Host",           value: summary.host },
+    { label: "Checked at",    value: summary.checked_at },
+    { label: "Built",         value: summary.timestamp },
+    { label: "Bundle file",   value: summary.bundle_file },
+    { label: "File count",    value: summary.total_count },
+    { label: "Total size",    value: summary.size },
+    { label: "maxBundleSize", value: summary.maxBundleSize },
   ] : [];
+
+  const toggleSort = (col: SortKey) => {
+    if (sortKey === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(col); setSortDir(col === "bytes" ? "desc" : "asc"); }
+  };
+
+  const filtered = allFiles.filter(r =>
+    !search || String(r.display ?? "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const sorted = [...filtered].sort((a, b) => {
+    let av: any = a[sortKey], bv: any = b[sortKey];
+    if (sortKey === "bytes") { av = Number(av) || 0; bv = Number(bv) || 0; }
+    else { av = String(av ?? ""); bv = String(bv ?? ""); }
+    if (av < bv) return sortDir === "asc" ? -1 : 1;
+    if (av > bv) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
@@ -464,38 +494,71 @@ function BundleFilesPanel() {
         </div>
       )}
 
+      {/* Summary — vertical label/value table */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 py-4 border-b border-surface-border">
-          {statCells.map(({ label, value }) => (
-            <div key={label}>
-              <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">{label}</div>
-              <div className="text-xs font-mono text-gray-200 truncate" title={value}>{value || "—"}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {files.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-surface-border text-[9px] uppercase tracking-wide text-gray-500">
-                <th className="text-left px-4 py-2 font-medium">File / KV store collection</th>
-                <th className="text-right px-4 py-2 font-medium w-24">Size (MB)</th>
-                <th className="text-right px-4 py-2 font-medium w-48">Last Modified</th>
-              </tr>
-            </thead>
+        <div className="border-b border-surface-border px-4 py-3">
+          <table className="text-xs border-collapse">
             <tbody>
-              {files.map((r, i) => (
-                <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                  <td className="px-4 py-1.5 font-mono text-gray-300">{r.display}</td>
-                  <td className="px-4 py-1.5 font-mono text-gray-400 text-right">{r.size}</td>
-                  <td className="px-4 py-1.5 font-mono text-gray-500 text-right">{r.last_mod}</td>
+              {statCells.map(({ label, value }) => (
+                <tr key={label}>
+                  <td className="py-0.5 pr-6 text-[10px] uppercase tracking-wide text-gray-500 whitespace-nowrap">{label}</td>
+                  <td className="py-0.5 font-mono text-gray-200">{value || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* File list */}
+      {allFiles.length > 0 && (
+        <>
+          {/* Search filter */}
+          <div className="px-4 py-2 border-b border-surface-border">
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Filter files..."
+              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-surface-border text-[9px] uppercase tracking-wide text-gray-500">
+                  <th className="text-left px-4 py-2 font-medium cursor-pointer hover:text-gray-300 select-none"
+                    onClick={() => toggleSort("display")}>
+                    File / KV store collection <SortIcon col="display" sortKey={sortKey} sortDir={sortDir} />
+                  </th>
+                  <th className="text-right px-4 py-2 font-medium w-28 cursor-pointer hover:text-gray-300 select-none"
+                    onClick={() => toggleSort("bytes")}>
+                    Size (MB) <SortIcon col="bytes" sortKey={sortKey} sortDir={sortDir} />
+                  </th>
+                  <th className="text-right px-4 py-2 font-medium w-48 cursor-pointer hover:text-gray-300 select-none"
+                    onClick={() => toggleSort("last_mod")}>
+                    Last Modified <SortIcon col="last_mod" sortKey={sortKey} sortDir={sortDir} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r, i) => (
+                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                    <td className="px-4 py-1.5 font-mono text-gray-300">{r.display}</td>
+                    <td className="px-4 py-1.5 font-mono text-gray-400 text-right">{r.size}</td>
+                    <td className="px-4 py-1.5 font-mono text-gray-500 text-right">{r.last_mod}</td>
+                  </tr>
+                ))}
+                {sorted.length === 0 && (
+                  <tr><td colSpan={3} className="px-4 py-3 text-center text-[11px] text-gray-500">No files match filter</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 text-[10px] text-gray-600">
+            {sorted.length} of {allFiles.length} files
+          </div>
+        </>
       )}
     </div>
   );
