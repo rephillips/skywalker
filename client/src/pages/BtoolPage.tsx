@@ -138,16 +138,16 @@ function ReferenceCard({ item: r, onExample }: { item: typeof REFERENCE[0]; onEx
         {open ? <ChevronUp size={12} className="text-gray-500" /> : <ChevronDown size={12} className="text-gray-500" />}
       </button>
       {open && (
-        <div className="px-4 pb-4 border-t border-surface-border/60">
+        <div className="px-3 pb-3 border-t border-surface-border/60">
           <code className="block mt-3 mb-2 text-[11px] font-mono text-emerald-300 whitespace-pre-wrap break-all leading-5">{r.syntax}</code>
           <p className="text-[11px] text-gray-400 leading-4 mb-3">{r.description}</p>
           <div className="mb-3">
             <div className="text-[10px] uppercase tracking-wide text-gray-600 mb-1.5">Flags</div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               {r.flags.map(fl => (
-                <div key={fl.f} className="flex gap-2">
-                  <code className="text-[10px] font-mono text-emerald-300/80 shrink-0 w-44">{fl.f}</code>
-                  <span className="text-[10px] text-gray-500">{fl.d}</span>
+                <div key={fl.f} className="flex flex-col gap-0.5">
+                  <code className="text-[10px] font-mono text-emerald-300/80">{fl.f}</code>
+                  <span className="text-[10px] text-gray-500 pl-2">{fl.d}</span>
                 </div>
               ))}
             </div>
@@ -201,6 +201,7 @@ export function BtoolPage() {
   const [filterText, setFilterText] = useState("");
   const [showRaw, setShowRaw]       = useState(false);
   const [expanded, setExpanded]     = useState<Set<string>>(new Set());
+  const [confSearch, setConfSearch] = useState("");
 
   function set(k: keyof BuilderOpts, v: any) {
     const next = { ...opts, [k]: v };
@@ -279,16 +280,26 @@ export function BtoolPage() {
             <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden">
               <div className="px-4 py-3 border-b border-surface-border flex items-center gap-2">
                 <ExternalLink size={11} className="text-emerald-400 shrink-0" />
-                <span className="text-xs font-semibold text-white">Conf File Docs</span>
+                <span className="text-xs font-semibold text-white">Conf Spec Lookup</span>
               </div>
-              <div className="px-3 py-3 flex flex-wrap gap-1.5">
-                {CONF_FILES.map(c => (
-                  <a key={c} href={CONF_DOCS[c]} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-[10px] font-mono text-emerald-300/70 hover:text-emerald-200 hover:border-emerald-400/40 transition-colors whitespace-nowrap">
-                    {c}.conf
-                    <ExternalLink size={8} className="opacity-50" />
-                  </a>
-                ))}
+              <div className="px-3 py-3 flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={confSearch}
+                  onChange={e => setConfSearch(e.target.value.replace(/\.conf$/i, "").toLowerCase())}
+                  placeholder="e.g. props"
+                  list="conf-files"
+                  className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60 w-full"
+                />
+                {confSearch && (
+                  CONF_DOCS[confSearch]
+                    ? <a href={CONF_DOCS[confSearch]} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors">
+                        <ExternalLink size={11} />
+                        {confSearch}.conf spec
+                      </a>
+                    : <span className="text-[11px] text-gray-600 font-mono">No docs found for "{confSearch}"</span>
+                )}
               </div>
             </div>
           </div>
