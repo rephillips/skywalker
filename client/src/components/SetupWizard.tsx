@@ -1,6 +1,46 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Loader2, Plug, Shield, Zap } from "lucide-react";
 
+function playErrorBuzz() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+
+    // Two descending droid-style beeps — pitch drops, square wave, harsh
+    [0, 0.22].forEach((offset, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(380 - i * 60, now + offset);
+      osc.frequency.exponentialRampToValueAtTime(160 - i * 30, now + offset + 0.18);
+      gain.gain.setValueAtTime(0, now + offset);
+      gain.gain.linearRampToValueAtTime(0.12, now + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.2);
+    });
+
+    // Low rumble underneath — sawtooth drone that decays
+    const drone = ctx.createOscillator();
+    const droneGain = ctx.createGain();
+    drone.type = "sawtooth";
+    drone.frequency.setValueAtTime(90, now);
+    drone.frequency.exponentialRampToValueAtTime(55, now + 0.45);
+    droneGain.gain.setValueAtTime(0.08, now);
+    droneGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    drone.connect(droneGain);
+    droneGain.connect(ctx.destination);
+    drone.start(now);
+    drone.stop(now + 0.45);
+
+    setTimeout(() => ctx.close(), 700);
+  } catch {
+    // Web Audio API unavailable — silently skip
+  }
+}
+
 function playLightsaberSwoosh() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -107,6 +147,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
       } else {
         // "warning" = config saved but Splunk unreachable; "error" = hard failure
         // Either way, stay on the form so the user can fix the URL / token.
+        playErrorBuzz();
         setError(data.message || "Connection failed — check the URL and token");
       }
     } catch (err) {
