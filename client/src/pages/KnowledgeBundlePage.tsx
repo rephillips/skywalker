@@ -379,12 +379,11 @@ function ReplicationSettingsPanel() {
 }
 
 const BLACKLIST_SPL = `| btool distsearch list replicationBlacklist splunk_server=local`;
-const PREVIEW_ROWS_BLACKLIST = 25;
 
 function ReplicationBlacklistPanel() {
   const [rawRows, setRawRows] = useState<any[]>([]);
   const [showRaw, setShowRaw] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading]  = useState(true);
   const [error, setError]      = useState<string | null>(null);
 
@@ -404,9 +403,6 @@ function ReplicationBlacklistPanel() {
   useEffect(() => { load(); }, [load]);
 
   const rows = parseBtoolRows(rawRows, "replicationBlacklist");
-  const kvRows = rows.filter(r => !r.isStanza);
-  const visible = expanded ? kvRows : kvRows.slice(0, PREVIEW_ROWS_BLACKLIST);
-  const hidden  = kvRows.length - PREVIEW_ROWS_BLACKLIST;
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
@@ -419,9 +415,8 @@ function ReplicationBlacklistPanel() {
           <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{BLACKLIST_SPL}</code>
         </div>
         <div className="flex items-center gap-3">
-          {!loading && rawRows.length > 0 && (
-            <button onClick={() => setShowRaw(s => !s)}
-              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+          {rawRows.length > 0 && (
+            <button onClick={() => setShowRaw(s => !s)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
               {showRaw ? "Hide raw" : "Show raw"}
             </button>
           )}
@@ -449,78 +444,92 @@ function ReplicationBlacklistPanel() {
         </div>
       )}
 
-      {!loading && !error && rawRows.length > 0 && rows.length === 0 && (
-        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
-          <AlertTriangle size={13} />
-          Stanza <code className="font-mono mx-1">[replicationBlacklist]</code> not found — it may not be configured on this SH.
-        </div>
-      )}
-
       {rows.length > 0 && (
         <>
-          {rows[0]?.isStanza && (
-            <div className="px-6 pt-4 pb-1 overflow-x-auto">
-              <div className="font-mono text-xs leading-5 flex whitespace-nowrap">
-                <span className="text-gray-500 shrink-0 w-[520px] pr-8">{rows[0].file}</span>
-                <span className="text-emerald-400/80">{rows[0].content}</span>
+          {(() => {
+            const groups: { stanza: string; rows: BtoolRow[] }[] = [];
+            let current: { stanza: string; rows: BtoolRow[] } | null = null;
+            for (const row of rows) {
+              if (row.isStanza) {
+                current = { stanza: row.stanza, rows: [row] };
+                groups.push(current);
+              } else if (current) {
+                current.rows.push(row);
+              }
+            }
+
+            return groups.map(group => {
+              const isExpanded = expanded.has(group.stanza);
+              const visible = isExpanded ? group.rows : group.rows.slice(0, PREVIEW_ROWS);
+              const hidden = group.rows.length - PREVIEW_ROWS;
+
+              return (
+                <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
+                  <div className="font-mono text-xs leading-5">
+                    {visible.map((row, i) => (
+                      <div key={i} className="flex whitespace-nowrap">
+                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
+                        <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>{row.content}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1">
+                    {!isExpanded && hidden > 0 && (
+                      <button
+                        onClick={() => setExpanded(s => new Set([...s, group.stanza]))}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
+                      >
+                        Show {hidden} more
+                      </button>
+                    )}
+                    {isExpanded && (
+                      <button
+                        onClick={() => setExpanded(s => { const n = new Set(s); n.delete(group.stanza); return n; })}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
+                      >
+                        Collapse
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+
+          {showRaw && (
+            <div className="border-t border-surface-border p-4">
+              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
+              <div className="overflow-x-auto rounded border border-surface-border">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-surface">
+                      {rawRows[0] && Object.keys(rawRows[0])
+                        .filter(k => !k.startsWith("_") || k === "_raw")
+                        .map(col => (
+                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                            {col}
+                          </th>
+                        ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rawRows.map((r, i) => (
+                      <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                        {Object.keys(rawRows[0])
+                          .filter(k => !k.startsWith("_") || k === "_raw")
+                          .map(col => (
+                            <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
+                              {String(r[col] ?? "")}
+                            </td>
+                          ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
-          <div className="px-6 pb-3 overflow-x-auto">
-            <div className="font-mono text-xs leading-5">
-              {visible.map((row, i) => (
-                <div key={i} className="flex whitespace-nowrap">
-                  <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
-                  <span className="text-gray-100">{row.content}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-1">
-              {!expanded && hidden > 0 && (
-                <button onClick={() => setExpanded(true)}
-                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
-                  Show {hidden} more
-                </button>
-              )}
-              {expanded && (
-                <button onClick={() => setExpanded(false)}
-                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
-                  Collapse
-                </button>
-              )}
-            </div>
-          </div>
         </>
-      )}
-
-      {showRaw && rawRows.length > 0 && (
-        <div className="border-t border-surface-border p-4">
-          <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
-          <div className="overflow-x-auto rounded border border-surface-border">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-surface">
-                  {Object.keys(rawRows[0]).filter(k => !k.startsWith("_") || k === "_raw").map(col => (
-                    <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rawRows.map((r, i) => (
-                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                    {Object.keys(rawRows[0]).filter(k => !k.startsWith("_") || k === "_raw").map(col => (
-                      <td key={col} className="px-3 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap max-w-xs truncate">
-                        {String(r[col] ?? "")}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
     </div>
   );
