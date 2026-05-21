@@ -29,11 +29,22 @@ router.put("/config", async (req, res, next) => {
     updateSplunkConfig({ baseUrl, username, password, token });
 
     // Test the connection with new config — generous timeout for loaded SHs
+    const testUrl = `${req.body.baseUrl}/services/server/info`;
     try {
       await splunkFetch("/services/server/info?output_mode=json", undefined, 60_000);
       res.json({ status: "ok", message: "Configuration updated and connection verified" });
     } catch (err) {
-      res.json({ status: "warning", message: `Configuration saved but Splunk unreachable: ${(err as Error).message}` });
+      const e = err as Error;
+      res.json({
+        status: "warning",
+        message: `Configuration saved but Splunk unreachable: ${e.message}`,
+        debug: {
+          url: testUrl,
+          error: e.message,
+          errorType: e.name,
+          timestamp: new Date().toISOString(),
+        },
+      });
     }
   } catch (err) {
     next(err);
@@ -42,12 +53,23 @@ router.put("/config", async (req, res, next) => {
 
 // Test connection
 router.post("/config/test", async (_req, res) => {
+  const testUrl = `${config.splunk.baseUrl}/services/server/info`;
   try {
     const info = await splunkFetch("/services/server/info?output_mode=json", undefined, 60_000);
     const serverName = info.entry?.[0]?.content?.serverName;
     res.json({ status: "ok", serverName });
   } catch (err) {
-    res.json({ status: "error", message: (err as Error).message });
+    const e = err as Error;
+    res.json({
+      status: "error",
+      message: e.message,
+      debug: {
+        url: testUrl,
+        error: e.message,
+        errorType: e.name,
+        timestamp: new Date().toISOString(),
+      },
+    });
   }
 });
 

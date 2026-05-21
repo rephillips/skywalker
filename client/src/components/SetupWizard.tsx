@@ -99,8 +99,10 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<Record<string, string> | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
   const [slowHint, setSlowHint] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // On mount: test existing connection — auto-proceed if it works
   useEffect(() => {
@@ -133,6 +135,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
     if (!token.trim()) { setError("Enter an API token"); return; }
     setSaving(true);
     setError(null);
+    setDebugInfo(null);
     setSlowHint(false);
     const slowTimer = setTimeout(() => setSlowHint(true), 8_000);
     try {
@@ -160,6 +163,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
         // Hard failure — config may not be saved; stay on the form.
         playErrorBuzz();
         setError(data.message || "Connection failed — check the URL and token");
+        if (data.debug) setDebugInfo(data.debug);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -259,8 +263,37 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
               </label>
 
               {error && (
-                <div className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm mb-4 bg-red-500/10 border border-red-500/20 text-red-400">
-                  <XCircle size={15} /> {error}
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 mb-4 overflow-hidden">
+                  <div className="flex items-start gap-2 px-4 py-3 text-sm text-red-400">
+                    <XCircle size={15} className="shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  {debugInfo && (
+                    <details className="border-t border-red-500/20">
+                      <summary className="px-4 py-2 text-[10px] text-red-400/70 cursor-pointer hover:text-red-300 select-none flex items-center justify-between">
+                        <span>Debug info</span>
+                        <button
+                          onClick={e => {
+                            e.preventDefault();
+                            navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2));
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }}
+                          className="text-[10px] text-red-400/60 hover:text-red-300 transition-colors"
+                        >
+                          {copied ? "Copied ✓" : "Copy"}
+                        </button>
+                      </summary>
+                      <div className="px-4 pb-3 pt-1 space-y-1">
+                        {Object.entries(debugInfo).map(([k, v]) => (
+                          <div key={k}>
+                            <span className="text-[9px] uppercase tracking-wide text-red-400/50">{k}</span>
+                            <pre className="text-[10px] font-mono text-red-300/80 whitespace-pre-wrap break-all">{v}</pre>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
               )}
 
