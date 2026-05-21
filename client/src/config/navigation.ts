@@ -39,6 +39,7 @@ export const navigation: NavItem[] = [
       { label: "Skipped Searches", icon: SkipForward, path: "/search/skipped" },
       { label: "Slow Searches", icon: Snail, path: "/search/slow" },
       { label: "Workload Management", icon: Gauge, path: "/search/workload" },
+      { label: "Search Analyzer", icon: Search, path: "/search/analyzer" },
     ],
   },
   {
