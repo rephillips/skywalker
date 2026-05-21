@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { Search, Loader2, Download, ExternalLink, Filter, Copy, Check } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Search, Loader2, Filter, Copy, Check } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -7,7 +7,7 @@ import { JobInspector } from "../components/panels/JobInspector";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "inspector" | "log" | "audit" | "download";
+type Tab = "inspector" | "log" | "audit";
 
 // ─── Log viewer ───────────────────────────────────────────────────────────────
 
@@ -59,102 +59,6 @@ function SearchLogTab({ log }: { log: string }) {
   );
 }
 
-// ─── Download tab ─────────────────────────────────────────────────────────────
-
-function DownloadTab({ sid, webUrl }: { sid: string; webUrl: string | null }) {
-  const [downloading, setDownloading] = useState(false);
-  const [copied, setCopied]           = useState(false);
-
-  async function downloadDispatch() {
-    setDownloading(true);
-    try {
-      const data = await api.dispatchFull(sid);
-      const binary = atob(data.base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "application/gzip" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dispatch_${sid}.tar.gz`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(`Download failed: ${(err as Error).message}`);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  function copySid() {
-    navigator.clipboard.writeText(sid).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-
-  const inspectorUrl = webUrl
-    ? `${webUrl}/en-US/app/search/job_inspector?sid=${encodeURIComponent(sid)}`
-    : null;
-
-  return (
-    <div className="p-6 flex flex-col gap-6">
-      {/* Download dispatch */}
-      <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-5 flex flex-col gap-3">
-        <div>
-          <p className="text-xs font-semibold text-white mb-1">Download Dispatch Bundle</p>
-          <p className="text-[11px] text-gray-500">Downloads the full dispatch directory as a <code className="font-mono text-emerald-300">.tar.gz</code> archive. Useful for offline analysis or sharing with Splunk Support.</p>
-        </div>
-        <button
-          onClick={downloadDispatch}
-          disabled={downloading}
-          className="flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 self-start"
-        >
-          {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-          Download Dispatch
-        </button>
-      </div>
-
-      {/* Open in Splunk */}
-      {inspectorUrl && (
-        <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-5 flex flex-col gap-3">
-          <div>
-            <p className="text-xs font-semibold text-white mb-1">Open in Splunk Job Inspector</p>
-            <p className="text-[11px] text-gray-500">Opens this job in the native Splunk Web Job Inspector interface.</p>
-          </div>
-          <a
-            href={inspectorUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors self-start"
-          >
-            <ExternalLink size={12} />
-            Open in Splunk Job Inspector ↗
-          </a>
-        </div>
-      )}
-
-      {/* Copyable SID */}
-      <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-5 flex flex-col gap-2">
-        <p className="text-xs font-semibold text-white">Search Job ID</p>
-        <div className="flex items-center gap-2">
-          <span className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 truncate select-all">
-            {sid}
-          </span>
-          <button
-            onClick={copySid}
-            className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-2 text-[11px] text-gray-400 hover:text-white hover:border-emerald-500/40 transition-colors shrink-0"
-          >
-            {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -167,12 +71,6 @@ export function SearchAnalyzerPage() {
   const [hasJob, setHasJob]     = useState(false);
   const [auditRows, setAuditRows] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("inspector");
-  const [webUrl, setWebUrl]     = useState<string | null>(null);
-
-  // Load webUrl once
-  useEffect(() => {
-    api.config().then(cfg => setWebUrl(cfg.webUrl || null)).catch(() => {});
-  }, []);
 
   const analyze = useCallback(async () => {
     const trimmed = input.trim();
@@ -241,7 +139,6 @@ export function SearchAnalyzerPage() {
     { id: "inspector", label: "Job Inspector" },
     { id: "log",       label: "search.log" },
     { id: "audit",     label: "Audit Trail", badge: auditRows.length },
-    { id: "download",  label: "Download" },
   ];
 
   return (
@@ -378,6 +275,17 @@ export function SearchAnalyzerPage() {
                                 </div>
                               </details>
                             )}
+                            {/* Raw event */}
+                            {row._raw && (
+                              <details className="border-t border-surface-border">
+                                <summary className="px-4 py-1.5 text-[10px] text-gray-600 cursor-pointer hover:text-gray-400 select-none">
+                                  Raw event
+                                </summary>
+                                <pre className="px-4 pb-3 pt-2 text-[10px] font-mono text-gray-400 whitespace-pre-wrap break-all">
+                                  {row._raw}
+                                </pre>
+                              </details>
+                            )}
                           </div>
                         );
                       })}
@@ -386,11 +294,6 @@ export function SearchAnalyzerPage() {
                 </div>
               )}
 
-              {activeTab === "download" && (
-                <div className="overflow-auto h-full">
-                  <DownloadTab sid={sid} webUrl={webUrl} />
-                </div>
-              )}
             </div>
           </div>
         )}
