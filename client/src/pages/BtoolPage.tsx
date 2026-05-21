@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   Terminal, Play, Loader2, Filter, ChevronDown, ChevronUp,
-  BookOpen, List, Layers, Package,
+  BookOpen, List, Layers, Package, ExternalLink,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -18,6 +18,12 @@ const CONF_FILES = [
   "distsearch", "alert_actions", "macros", "tags", "eventtypes",
   "fields", "passwords", "workflow_actions",
 ];
+
+const DOCS_BASE = "https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.3-configuration-file-reference";
+
+const CONF_DOCS: Record<string, string> = Object.fromEntries(
+  CONF_FILES.map(c => [c, `${DOCS_BASE}/${c}.conf`])
+);
 
 const REFERENCE = [
   {
@@ -270,13 +276,20 @@ export function BtoolPage() {
             {REFERENCE.map(r => (
               <ReferenceCard key={r.id} item={r} onExample={loadExample} />
             ))}
-            <div className="rounded-lg border border-surface-border/50 px-3 py-2 mt-1">
-              <p className="text-[10px] text-gray-600 leading-4">
-                <span className="text-gray-500 font-medium">Requires</span> Admin's Little Helper for{" "}
-                <code className="font-mono text-emerald-300/60">btool list</code> /{" "}
-                <code className="font-mono text-emerald-300/60">btool list</code> /{" "}
-                <code className="font-mono text-emerald-300/60">bundlefiles</code>.
-              </p>
+            <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden">
+              <div className="px-4 py-3 border-b border-surface-border flex items-center gap-2">
+                <ExternalLink size={11} className="text-emerald-400 shrink-0" />
+                <span className="text-xs font-semibold text-white">Conf File Docs</span>
+              </div>
+              <div className="px-3 py-3 flex flex-wrap gap-1.5">
+                {CONF_FILES.map(c => (
+                  <a key={c} href={CONF_DOCS[c]} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-[10px] font-mono text-emerald-300/70 hover:text-emerald-200 hover:border-emerald-400/40 transition-colors whitespace-nowrap">
+                    {c}.conf
+                    <ExternalLink size={8} className="opacity-50" />
+                  </a>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -309,7 +322,16 @@ export function BtoolPage() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {cmdType === "list" && (<>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase tracking-wide text-gray-500">Conf file</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase tracking-wide text-gray-500">Conf file</label>
+                      {CONF_DOCS[opts.confname] && (
+                        <a href={CONF_DOCS[opts.confname]} target="_blank" rel="noreferrer"
+                          className="flex items-center gap-0.5 text-[10px] text-emerald-400/70 hover:text-emerald-300 transition-colors">
+                          <ExternalLink size={9} />
+                          <span>docs</span>
+                        </a>
+                      )}
+                    </div>
                     <input type="text" value={opts.confname} onChange={e => set("confname", e.target.value)}
                       placeholder="e.g. distsearch" list="conf-files"
                       className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60" />
