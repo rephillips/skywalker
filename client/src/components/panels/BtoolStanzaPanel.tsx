@@ -29,57 +29,27 @@ function splitRaw(rawStr: string, splunkBase: string): Array<{ file: string; con
 function parseBtoolRows(results: any[], stanza: string): BtoolRow[] {
   if (!results.length) return [];
 
-  // Path 1: _raw contains full btool lines starting with a file path
   const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
-  if (hasRawPaths) {
-    const firstPath = String(results.find(r => /^\//.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
-    const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
-    const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
+  if (!hasRawPaths) return [];
 
-    const out: BtoolRow[] = [];
-    let currentStanza = "";
+  const firstPath = String(results.find(r => /^\//.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
+  const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
+  const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
 
-    for (const row of results) {
-      const rawStr = String(row._raw ?? "").trim();
-      if (!rawStr.startsWith("/")) continue;
-      for (const { file, content } of splitRaw(rawStr, splunkBase)) {
-        const isStanza = /^\[.+\]$/.test(content);
-        if (isStanza) currentStanza = content.slice(1, -1);
-        if (currentStanza !== stanza) continue;
-        out.push({ file, content, isStanza, stanza: currentStanza });
-      }
+  const out: BtoolRow[] = [];
+  let currentStanza = "";
+
+  for (const row of results) {
+    const rawStr = String(row._raw ?? "").trim();
+    if (!rawStr.startsWith("/")) continue;
+    for (const { file, content } of splitRaw(rawStr, splunkBase)) {
+      const isStanza = /^\[.+\]$/.test(content);
+      if (isStanza) currentStanza = content.slice(1, -1);
+      if (currentStanza !== stanza) continue;
+      out.push({ file, content, isStanza, stanza: currentStanza });
     }
-    if (out.length > 0) return out;
   }
-
-  // Path 2: results have named fields — try to extract key/value rows directly.
-  // Admin's Little Helper may return attribute/value columns for some stanzas.
-  const allFields = Object.keys(results[0]).filter(k => !k.startsWith("_"));
-  const fileField = allFields.find(k =>
-    results.some(r => /^\//.test(String(r[k] ?? "")))
-  ) ?? "";
-  const attrField = allFields.find(k => ["attribute", "key", "name"].includes(k.toLowerCase()));
-  const valField  = allFields.find(k => ["value", "val"].includes(k.toLowerCase()));
-
-  if (attrField && valField) {
-    const out: BtoolRow[] = [];
-    let addedStanza = false;
-    for (const row of results) {
-      const attr = String(row[attrField] ?? "").trim();
-      const val  = String(row[valField]  ?? "").trim();
-      const file = fileField ? String(row[fileField] ?? "") : "";
-      if (!attr) continue;
-      if (/^\[.+\]$/.test(attr)) continue; // skip stanza header rows
-      if (!addedStanza) {
-        out.push({ file, content: `[${stanza}]`, isStanza: true, stanza });
-        addedStanza = true;
-      }
-      out.push({ file, content: `${attr} = ${val}`, isStanza: false, stanza });
-    }
-    if (out.length > 0) return out;
-  }
-
-  return [];
+  return out;
 }
 
 const PREVIEW_ROWS = 25;
