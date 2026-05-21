@@ -72,6 +72,8 @@ export function SearchAnalyzerPage() {
   const [auditRows, setAuditRows]     = useState<any[]>([]);
   const [indexerRows, setIndexerRows] = useState<any[]>([]);
   const [activeTab, setActiveTab]     = useState<Tab>("inspector");
+  const [earliest, setEarliest]       = useState("-24h");
+  const [latest, setLatest]           = useState("now");
 
   const analyze = useCallback(async () => {
     const trimmed = input.trim();
@@ -91,8 +93,8 @@ export function SearchAnalyzerPage() {
       const [logResult, jobResult, auditResult, indexerResult] = await Promise.allSettled([
         api.searchLog(trimmed),
         api.proxy("search/v2/jobs/" + encodeURIComponent(trimmed)),
-        api.search(auditSpl),
-        api.search(indexerSpl),
+        api.search(auditSpl, earliest, latest),
+        api.search(indexerSpl, earliest, latest),
       ]);
 
       let gotSomething = false;
@@ -141,7 +143,7 @@ export function SearchAnalyzerPage() {
     } finally {
       setLoading(false);
     }
-  }, [input]);
+  }, [input, earliest, latest]);
 
   const hasResults = !!sid && (hasJob || log !== null);
 
@@ -160,19 +162,41 @@ export function SearchAnalyzerPage() {
 
         {/* ── SID input card ── */}
         <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-4 shrink-0">
-          <label className="block text-[10px] uppercase tracking-wide text-gray-500 mb-2">
-            Search Job ID (SID)
-          </label>
+          <div className="flex items-end gap-3 mb-3">
+            <div className="flex flex-col gap-1 flex-1">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">Search Job ID (SID)</label>
+              <input
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); analyze(); } }}
+                placeholder="e.g. 1718000000.12345"
+                spellCheck={false}
+                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 placeholder:text-gray-600"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">Earliest</label>
+              <input
+                type="text"
+                value={earliest}
+                onChange={e => setEarliest(e.target.value)}
+                placeholder="-24h"
+                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">Latest</label>
+              <input
+                type="text"
+                value={latest}
+                onChange={e => setLatest(e.target.value)}
+                placeholder="now"
+                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28"
+              />
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); analyze(); } }}
-              placeholder="e.g. 1718000000.12345"
-              spellCheck={false}
-              className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 placeholder:text-gray-600"
-            />
             <button
               onClick={analyze}
               disabled={loading || !input.trim()}
