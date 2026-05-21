@@ -7,7 +7,7 @@ import { JobInspector } from "../components/panels/JobInspector";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "inspector" | "log" | "download";
+type Tab = "inspector" | "log" | "audit" | "download";
 
 // ─── Log viewer ───────────────────────────────────────────────────────────────
 
@@ -163,10 +163,11 @@ export function SearchAnalyzerPage() {
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
-  const [log, setLog]         = useState<string | null>(null);
-  const [hasJob, setHasJob]   = useState(false);
+  const [log, setLog]           = useState<string | null>(null);
+  const [hasJob, setHasJob]     = useState(false);
+  const [auditRows, setAuditRows] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("inspector");
-  const [webUrl, setWebUrl]   = useState<string | null>(null);
+  const [webUrl, setWebUrl]     = useState<string | null>(null);
 
   // Load webUrl once
   useEffect(() => {
@@ -180,12 +181,16 @@ export function SearchAnalyzerPage() {
     setError(null);
     setLog(null);
     setHasJob(false);
+    setAuditRows([]);
     setSid("");
 
+    const auditSpl = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='${trimmed}'`;
+
     try {
-      const [logResult, jobResult] = await Promise.allSettled([
+      const [logResult, jobResult, auditResult] = await Promise.allSettled([
         api.searchLog(trimmed),
         api.proxy("search/v2/jobs/" + encodeURIComponent(trimmed)),
+        api.search(auditSpl),
       ]);
 
       let gotSomething = false;
@@ -203,6 +208,12 @@ export function SearchAnalyzerPage() {
       if (jobResult.status === "fulfilled" && jobResult.value?.data?.entry?.[0]?.content) {
         setHasJob(true);
         gotSomething = true;
+      }
+
+      if (auditResult.status === "fulfilled") {
+        const rows = auditResult.value?.results ?? [];
+        setAuditRows(rows);
+        if (rows.length > 0) gotSomething = true;
       }
 
       if (!gotSomething) {
@@ -226,9 +237,10 @@ export function SearchAnalyzerPage() {
 
   const hasResults = !!sid && (hasJob || log !== null);
 
-  const TABS: { id: Tab; label: string }[] = [
+  const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "inspector", label: "Job Inspector" },
     { id: "log",       label: "search.log" },
+    { id: "audit",     label: "Audit Trail", badge: auditRows.length },
     { id: "download",  label: "Download" },
   ];
 
@@ -280,13 +292,18 @@ export function SearchAnalyzerPage() {
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
-                  className={`px-3 py-1.5 text-[11px] font-mono rounded-t-md whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono rounded-t-md whitespace-nowrap transition-colors border-b-2 -mb-px ${
                     activeTab === t.id
                       ? "text-emerald-300 border-emerald-400 bg-emerald-500/10"
                       : "text-gray-500 border-transparent hover:text-gray-300"
                   }`}
                 >
                   {t.label}
+                  {t.badge !== undefined && t.badge > 0 && (
+                    <span className="rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 py-0.5 leading-none">
+                      {t.badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -308,6 +325,64 @@ export function SearchAnalyzerPage() {
               {activeTab === "log" && log === null && (
                 <div className="flex items-center justify-center h-full text-[11px] text-gray-500">
                   No search.log available for this job.
+                </div>
+              )}
+
+              {activeTab === "audit" && (
+                <div className="overflow-auto h-full">
+                  {auditRows.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-[11px] text-gray-500">
+                      <p>No audit trail events found.</p>
+                      <code className="text-[10px] font-mono text-emerald-400/60 px-3 py-1.5 rounded bg-surface border border-surface-border">
+                        index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='{sid}'
+                      </code>
+                    </div>
+                  ) : (
+                    <div className="p-4 flex flex-col gap-4">
+                      {auditRows.map((row, i) => {
+                        const HIGHLIGHT = ["user", "exec_time", "total_run_time", "search_type", "host", "splunk_server", "search"];
+                        const highlight = HIGHLIGHT.filter(k => row[k] != null && row[k] !== "");
+                        const rest = Object.entries(row)
+                          .filter(([k]) => !k.startsWith("_") && !HIGHLIGHT.includes(k) && row[k] !== "")
+                          .sort(([a], [b]) => a.localeCompare(b));
+                        return (
+                          <div key={i} className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden">
+                            <div className="px-4 py-2 border-b border-surface-border bg-surface/40 flex items-center gap-2">
+                              <span className="text-[10px] text-gray-500 font-mono">{row._time ?? `Event ${i + 1}`}</span>
+                              {row.host && <span className="text-[10px] font-mono text-emerald-400/70">{row.host}</span>}
+                            </div>
+                            {/* Key highlights */}
+                            <div className="px-4 py-3 grid grid-cols-3 gap-x-6 gap-y-2">
+                              {highlight.map(k => (
+                                <div key={k}>
+                                  <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">{k}</div>
+                                  <div className={`text-[11px] font-mono break-all ${k === "search" ? "text-emerald-300 col-span-3" : "text-gray-200"}`}>
+                                    {String(row[k])}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Remaining fields collapsible */}
+                            {rest.length > 0 && (
+                              <details className="border-t border-surface-border">
+                                <summary className="px-4 py-1.5 text-[10px] text-gray-600 cursor-pointer hover:text-gray-400 select-none">
+                                  {rest.length} more fields
+                                </summary>
+                                <div className="px-4 pb-3 grid grid-cols-3 gap-x-6 gap-y-1.5 pt-2">
+                                  {rest.map(([k, v]) => (
+                                    <div key={k}>
+                                      <div className="text-[9px] uppercase tracking-wide text-gray-500 mb-0.5">{k}</div>
+                                      <div className="text-[11px] font-mono text-gray-400 break-all">{String(v)}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
