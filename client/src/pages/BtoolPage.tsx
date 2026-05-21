@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   Terminal, Play, Loader2, Filter, ChevronDown, ChevronUp,
-  BookOpen, List, Layers, Package, ExternalLink,
+  BookOpen, List, Layers, Package, ExternalLink, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -200,6 +200,7 @@ export function BtoolPage() {
   const [showRaw, setShowRaw]       = useState(false);
   const [expanded, setExpanded]     = useState<Set<string>>(new Set());
   const [confSearch, setConfSearch] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   function set(k: keyof BuilderOpts, v: any) {
     const next = { ...opts, [k]: v };
@@ -265,13 +266,22 @@ export function BtoolPage() {
       <TopBar title="Btool" hideTimePicker />
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* ── Left: Reference ── */}
-        <div className="w-72 shrink-0 border-r border-surface-border flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-surface-border flex items-center gap-2">
-            <BookOpen size={13} className="text-emerald-400" />
-            <span className="text-xs font-semibold text-white">Command Reference</span>
+        {/* ── Left: Reference (collapsible) ── */}
+        <div className={`shrink-0 border-r border-surface-border flex flex-col overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-72" : "w-10"}`}>
+          <div className="px-2 py-3 border-b border-surface-border flex items-center gap-2 justify-between">
+            {sidebarOpen && (
+              <>
+                <BookOpen size={13} className="text-emerald-400 shrink-0" />
+                <span className="text-xs font-semibold text-white flex-1">Command Reference</span>
+              </>
+            )}
+            <button onClick={() => setSidebarOpen(o => !o)}
+              className="text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+              title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
+              {sidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+          {sidebarOpen && <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
             {REFERENCE.map(r => (
               <ReferenceCard key={r.id} item={r} onExample={loadExample} />
             ))}
@@ -300,7 +310,7 @@ export function BtoolPage() {
                 )}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* ── Right: Builder + Results ── */}
