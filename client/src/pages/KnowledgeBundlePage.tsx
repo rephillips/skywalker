@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive } from "lucide-react";
+import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive, ChevronDown, ChevronUp } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
+import { BtoolStanzaPanel } from "../components/panels/BtoolStanzaPanel";
 
 interface BundleInfo {
   [key: string]: any;
@@ -407,12 +408,16 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 function BundleFilesPanel() {
-  const [rows, setRows]       = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [search, setSearch]   = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("bytes");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [rows, setRows]           = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [search, setSearch]       = useState("");
+  const [sortKey, setSortKey]     = useState<SortKey>("bytes");
+  const [sortDir, setSortDir]     = useState<SortDir>("desc");
+  const [collapsed, setCollapsed] = useState(false);
+  const [filesExpanded, setFilesExpanded] = useState(false);
+
+  const FILE_PREVIEW = 10;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -447,6 +452,8 @@ function BundleFilesPanel() {
     else { setSortKey(col); setSortDir(col === "bytes" ? "desc" : "asc"); }
   };
 
+  const handleSearch = (val: string) => { setSearch(val); setFilesExpanded(false); };
+
   const filtered = allFiles.filter(r =>
     !search || String(r.display ?? "").toLowerCase().includes(search.toLowerCase())
   );
@@ -464,13 +471,14 @@ function BundleFilesPanel() {
     <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
-        <div className="flex flex-col gap-0.5">
+        <button onClick={() => setCollapsed(c => !c)} className="flex flex-col gap-0.5 text-left hover:opacity-80 transition-opacity">
           <div className="flex items-center gap-2">
             <Archive size={14} className="text-brand-400" />
             <h3 className="text-xs font-semibold text-white">Knowledge Bundle</h3>
+            {collapsed ? <ChevronDown size={12} className="text-gray-500" /> : <ChevronUp size={12} className="text-gray-500" />}
           </div>
           <code className="text-[10px] font-mono text-emerald-400/60 pl-5">| bundlefiles</code>
-        </div>
+        </button>
         <button onClick={load} disabled={loading}
           className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
           {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
@@ -478,6 +486,7 @@ function BundleFilesPanel() {
         </button>
       </div>
 
+      {!collapsed && (<>
       {error && <div className="p-3"><ErrorAlert message={error} /></div>}
 
       {loading && !rows.length && (
@@ -518,7 +527,7 @@ function BundleFilesPanel() {
             <input
               type="text"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => handleSearch(e.target.value)}
               placeholder="Filter files..."
               className="w-full rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-100 font-mono outline-none focus:border-brand-500 transition-colors"
             />
@@ -542,7 +551,7 @@ function BundleFilesPanel() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((r, i) => (
+                {(filesExpanded ? sorted : sorted.slice(0, FILE_PREVIEW)).map((r, i) => (
                   <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
                     <td className="px-4 py-1.5 font-mono text-gray-300">{r.display}</td>
                     <td className="px-4 py-1.5 font-mono text-gray-400 text-right">{r.size}</td>
@@ -555,11 +564,20 @@ function BundleFilesPanel() {
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-2 text-[10px] text-gray-600">
-            {sorted.length} of {allFiles.length} files
+          <div className="px-4 py-2 flex items-center justify-between text-[10px] text-gray-600">
+            <span>{filesExpanded ? sorted.length : Math.min(FILE_PREVIEW, sorted.length)} of {sorted.length} files</span>
+            {sorted.length > FILE_PREVIEW && (
+              <button
+                onClick={() => setFilesExpanded(e => !e)}
+                className="text-brand-400 hover:text-brand-200 transition-colors"
+              >
+                {filesExpanded ? "Collapse" : `Show ${sorted.length - FILE_PREVIEW} more`}
+              </button>
+            )}
           </div>
         </>
       )}
+      </>)}
     </div>
   );
 }
@@ -609,6 +627,11 @@ export function KnowledgeBundlePage() {
       <TopBar title="Knowledge Bundle" hideTimePicker />
       <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
+        <BtoolStanzaPanel
+          conf="distsearch"
+          stanza="replicationBlacklist"
+          headerLabel="Replication Blacklist"
+        />
         <BundleFilesPanel />
       </div>
       <div className="p-6 max-w-4xl">
