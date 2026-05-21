@@ -123,7 +123,7 @@ export async function executeSearch(
   spl: string,
   earliest?: string,
   latest?: string,
-  timeoutMs = 30000
+  timeoutMs = 120_000
 ): Promise<any> {
   const sid = await createSearchJob(spl, earliest, latest);
   const start = Date.now();
@@ -141,5 +141,5 @@ export async function executeSearch(
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Search job ${sid} timed out after ${timeoutMs}ms`);
+  throw new Error(`Search job ${sid} timed out after ${timeoutMs / 1000}s`);
 }
