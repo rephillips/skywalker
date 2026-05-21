@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
-import { BtoolStanzaPanel } from "../components/panels/BtoolStanzaPanel";
 
 interface BundleInfo {
   [key: string]: any;
@@ -26,7 +25,7 @@ interface BtoolRow {
   rawObj: any;
 }
 
-function parseBtoolRows(results: any[]): BtoolRow[] {
+function parseBtoolRows(results: any[], targetStanza: string): BtoolRow[] {
   if (!results.length) return [];
 
   // Prefer _raw parsing — gives us the full file path directly.
@@ -66,7 +65,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
       for (const { file, content } of splitRaw(rawStr)) {
         const isStanza = /^\[.+\]$/.test(content);
         if (isStanza) currentStanza = content.slice(1, -1);
-        if (currentStanza !== "replicationSettings") continue;
+        if (currentStanza !== targetStanza) continue;
         out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
       }
     }
@@ -96,16 +95,16 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     let addedStanza = false;
 
     for (const row of results) {
-      const stanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
-      // Exact match only — exclude replicationSettings:refineConf and any sub-stanzas
-      if (stanza && stanza !== "replicationSettings") continue;
+      const rowStanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
+      // Exact match only — exclude sub-stanzas like replicationSettings:refineConf
+      if (rowStanza && rowStanza !== targetStanza) continue;
 
       const file = fileField
         ? String(row[fileField] ?? "")
         : confField ? String(row[confField] ?? "") : "";
 
       if (!addedStanza) {
-        out.push({ file, content: `[${stanza || "replicationSettings"}]`, isStanza: true, stanza: stanza || "replicationSettings", rawObj: row });
+        out.push({ file, content: `[${targetStanza}]`, isStanza: true, stanza: targetStanza, rawObj: row });
         addedStanza = true;
       }
 
@@ -121,15 +120,15 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
           const normalise = (s: string) => s.toUpperCase().replace(/[\._]/g, "");
           const matchCol = settingCols.find(c => normalise(c) === normalise(key));
           const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
-          if (!val) continue; // skip attributes with no value (refineConf rows)
-          out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+          if (!val) continue;
+          out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: targetStanza, rawObj: row });
         }
       } else {
         // Fallback: one row per non-empty setting column
         for (const col of settingCols) {
           const val = String(row[col] ?? "").trim();
           if (!val) continue;
-          out.push({ file, content: `${col} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+          out.push({ file, content: `${col} = ${val}`, isStanza: false, stanza: targetStanza, rawObj: row });
         }
       }
     }
@@ -168,7 +167,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
     const content = getContent(row).trim();
     const isStanza = /^\[.+\]$/.test(content);
     if (isStanza) currentStanza = content.replace(/^\[/, "").replace(/\]$/, "");
-    if (currentStanza !== "replicationSettings") continue;
+    if (currentStanza !== targetStanza) continue;
     out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
   }
   return out.length > 0 ? out : results.map(row => ({
@@ -224,7 +223,7 @@ function ReplicationSettingsPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const rows = parseBtoolRows(rawRows);
+  const rows = parseBtoolRows(rawRows, "replicationSettings");
   const policy = rows.find(r => r.content.startsWith("replicationPolicy ="))
     ?.content.replace("replicationPolicy =", "").trim() ?? null;
 
@@ -374,6 +373,154 @@ function ReplicationSettingsPanel() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+const BLACKLIST_SPL = `| btool distsearch list replicationBlacklist splunk_server=local`;
+const PREVIEW_ROWS_BLACKLIST = 25;
+
+function ReplicationBlacklistPanel() {
+  const [rawRows, setRawRows] = useState<any[]>([]);
+  const [showRaw, setShowRaw] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading]  = useState(true);
+  const [error, setError]      = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.search(BLACKLIST_SPL);
+      setRawRows(res.results ?? []);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const rows = parseBtoolRows(rawRows, "replicationBlacklist");
+  const kvRows = rows.filter(r => !r.isStanza);
+  const visible = expanded ? kvRows : kvRows.slice(0, PREVIEW_ROWS_BLACKLIST);
+  const hidden  = kvRows.length - PREVIEW_ROWS_BLACKLIST;
+
+  return (
+    <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <FileText size={14} className="text-brand-400" />
+            <h3 className="text-xs font-semibold text-white">Replication Blacklist</h3>
+          </div>
+          <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{BLACKLIST_SPL}</code>
+        </div>
+        <div className="flex items-center gap-3">
+          {!loading && rawRows.length > 0 && (
+            <button onClick={() => setShowRaw(s => !s)}
+              className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
+              {showRaw ? "Hide raw" : "Show raw"}
+            </button>
+          )}
+          <button onClick={load} disabled={loading}
+            className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
+            {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="p-3"><ErrorAlert message={error} /></div>}
+
+      {loading && !rawRows.length && (
+        <div className="p-6 text-center">
+          <Loader2 size={20} className="mx-auto mb-2 text-brand-400 animate-spin" />
+          <p className="text-[11px] text-gray-500">Running btool...</p>
+        </div>
+      )}
+
+      {!loading && !error && rawRows.length === 0 && (
+        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
+          <AlertTriangle size={13} />
+          No results — Admin&apos;s Little Helper app may not be installed on this SH.
+        </div>
+      )}
+
+      {!loading && !error && rawRows.length > 0 && rows.length === 0 && (
+        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
+          <AlertTriangle size={13} />
+          Stanza <code className="font-mono mx-1">[replicationBlacklist]</code> not found — it may not be configured on this SH.
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <>
+          {rows[0]?.isStanza && (
+            <div className="px-6 pt-4 pb-1 overflow-x-auto">
+              <div className="font-mono text-xs leading-5 flex whitespace-nowrap">
+                <span className="text-gray-500 shrink-0 w-[520px] pr-8">{rows[0].file}</span>
+                <span className="text-emerald-400/80">{rows[0].content}</span>
+              </div>
+            </div>
+          )}
+          <div className="px-6 pb-3 overflow-x-auto">
+            <div className="font-mono text-xs leading-5">
+              {visible.map((row, i) => (
+                <div key={i} className="flex whitespace-nowrap">
+                  <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
+                  <span className="text-gray-100">{row.content}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1">
+              {!expanded && hidden > 0 && (
+                <button onClick={() => setExpanded(true)}
+                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
+                  Show {hidden} more
+                </button>
+              )}
+              {expanded && (
+                <button onClick={() => setExpanded(false)}
+                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
+                  Collapse
+                </button>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {showRaw && rawRows.length > 0 && (
+        <div className="border-t border-surface-border p-4">
+          <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
+          <div className="overflow-x-auto rounded border border-surface-border">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-surface">
+                  {Object.keys(rawRows[0]).filter(k => !k.startsWith("_") || k === "_raw").map(col => (
+                    <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rawRows.map((r, i) => (
+                  <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
+                    {Object.keys(rawRows[0]).filter(k => !k.startsWith("_") || k === "_raw").map(col => (
+                      <td key={col} className="px-3 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap max-w-xs truncate">
+                        {String(r[col] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -627,11 +774,7 @@ export function KnowledgeBundlePage() {
       <TopBar title="Knowledge Bundle" hideTimePicker />
       <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
-        <BtoolStanzaPanel
-          conf="distsearch"
-          stanza="replicationBlacklist"
-          headerLabel="Replication Blacklist"
-        />
+        <ReplicationBlacklistPanel />
         <BundleFilesPanel />
       </div>
       <div className="p-6 max-w-4xl">
