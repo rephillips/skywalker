@@ -35,14 +35,21 @@ export function parseBtoolRows(results: any[], targetStanza: string): BtoolRow[]
 
     const out: BtoolRow[] = [];
     let currentStanza = "";
+    let addedStanzaHeader = false;
     for (const row of results) {
       const rawStr = String(row._raw ?? "").trim();
       if (!rawStr.startsWith("/")) continue;
       for (const { file, content } of splitRaw(rawStr, escapedBase)) {
         const isStanza = /^\[.+\]$/.test(content);
-        if (isStanza) currentStanza = content.slice(1, -1);
-        if (currentStanza !== targetStanza) continue;
-        out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+        if (isStanza) {
+          currentStanza = content.slice(1, -1);
+          if (currentStanza === targetStanza && !addedStanzaHeader) {
+            out.push({ file, content, isStanza: true, stanza: currentStanza, rawObj: row });
+            addedStanzaHeader = true;
+          }
+        } else if (currentStanza === targetStanza) {
+          out.push({ file, content, isStanza: false, stanza: currentStanza, rawObj: row });
+        }
       }
     }
     if (out.length > 0) return out;
