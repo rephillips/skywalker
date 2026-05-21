@@ -14,7 +14,11 @@ function authHeader(): string {
 }
 
 export async function splunkFetch(path: string, options?: RequestInit, timeoutMs = 15_000): Promise<any> {
+  if (!config.splunk.token && !config.splunk.password) {
+    throw new Error("No Splunk credentials configured — connect via the setup wizard first");
+  }
   const url = `${config.splunk.baseUrl}${path}`;
+  console.log(`[Splunk] ${options?.method ?? "GET"} ${config.splunk.baseUrl}${path.split("?")[0]}`);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

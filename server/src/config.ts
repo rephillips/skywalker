@@ -52,15 +52,17 @@ export async function initConfig(): Promise<void> {
   }
 }
 
-/** Update Splunk config at runtime (from the Settings page) */
+/** Update Splunk config at runtime (from the Settings page / setup wizard).
+ *  Uses !== undefined so empty strings explicitly clear a field. */
 export function updateSplunkConfig(updates: {
   baseUrl?: string;
   username?: string;
   password?: string;
   token?: string;
 }) {
-  if (updates.baseUrl) config.splunk.baseUrl = updates.baseUrl;
-  if (updates.username) config.splunk.username = updates.username;
-  if (updates.password) config.splunk.password = updates.password;
-  if (updates.token) config.splunk.token = updates.token;
+  if (updates.baseUrl  !== undefined) config.splunk.baseUrl  = updates.baseUrl;
+  if (updates.username !== undefined) config.splunk.username = updates.username;
+  if (updates.password !== undefined) config.splunk.password = updates.password;
+  if (updates.token    !== undefined) config.splunk.token    = updates.token;
+  console.log(`[Config] Splunk target: ${config.splunk.baseUrl} | auth: ${config.splunk.token ? "token" : config.splunk.password ? "basic" : "NONE"}`);
 }
