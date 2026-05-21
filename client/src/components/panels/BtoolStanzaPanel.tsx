@@ -2,104 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import { FileText, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { api } from "../../services/api";
 import { ErrorAlert } from "../common/ErrorAlert";
-
-interface BtoolRow {
-  file: string;
-  content: string;
-  isStanza: boolean;
-  stanza: string;
-}
-
-function splitRaw(rawStr: string, splunkBase: string): Array<{ file: string; content: string }> {
-  // Case 1: real newlines — each line is unambiguously one btool entry
-  const byNewline = rawStr.split(/\r?\n/).map(l => l.trim()).filter(l => /^\S+\.conf\s/.test(l));
-  if (byNewline.length > 1) {
-    return byNewline.flatMap(line => {
-      const m = line.match(/^(\S+\.conf)\s{2,}(.*)/);
-      return m ? [{ file: m[1], content: m[2].trim() }] : [];
-    });
-  }
-  // Case 2: concatenated — anchor on detected Splunk base path to avoid
-  // false splits inside path-valued attributes (S3 URIs, conf paths, etc.)
-  const escaped = splunkBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const lineRe = new RegExp(`(\\S+\\.conf)\\s{2,}(.*?)(?=${escaped}\\/|$)`, "gs");
-  return [...rawStr.matchAll(lineRe)].map(m => ({ file: m[1], content: m[2].trim() }));
-}
-
-function parseBtoolRows(results: any[], stanza: string): BtoolRow[] {
-  if (!results.length) return [];
-
-  const allFields = Object.keys(results[0]);
-
-  // Format A: Admin's Little Helper BTOOL.* named fields
-  // _raw = just the file path; data lives in BTOOL.KEYS, BTOOL.STANZA, etc.
-  if (allFields.some(k => /^btool\./i.test(k))) {
-    const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
-    const stanzaField = allFields.find(k => /^btool\.stanza$/i.test(k));
-    const fileField   = allFields.find(k =>
-      results.some(r => /^\//.test(String(r[k] ?? "")))
-    );
-    const metaFields  = new Set(allFields.filter(k => /^btool\./i.test(k)));
-
-    const out: BtoolRow[] = [];
-    let addedStanza = false;
-
-    for (const row of results) {
-      const rowStanza = stanzaField ? String(row[stanzaField] ?? "").trim() : "";
-      if (rowStanza !== stanza) continue;
-
-      const file = fileField ? String(row[fileField] ?? "") : "";
-      if (!addedStanza) {
-        out.push({ file, content: `[${stanza}]`, isStanza: true, stanza });
-        addedStanza = true;
-      }
-
-      const keys = keysField
-        ? String(row[keysField] ?? "").split(",").map(k => k.trim()).filter(Boolean)
-        : allFields.filter(k => !metaFields.has(k) && !k.startsWith("_"));
-
-      const normalise = (s: string) => s.toUpperCase().replace(/[._]/g, "");
-      for (const key of keys) {
-        const col = allFields.find(c => normalise(c) === normalise(key)) ?? key;
-        const val = String(row[col] ?? "").trim();
-        if (!val) continue;
-        out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza });
-      }
-    }
-    return out;
-  }
-
-  // Format B: _raw contains full btool lines — "/path/to/file.conf    key = value"
-  const hasFullBtoolRaw = results.some(r => /^\S+\.conf\s{2,}/.test(String(r._raw ?? "").trim()));
-  if (!hasFullBtoolRaw) return [];
-
-  const firstPath = String(results.find(r => /^\S+\.conf\s{2,}/.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
-  const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
-  const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
-
-  const out: BtoolRow[] = [];
-  let currentStanza = "";
-
-  for (const row of results) {
-    const rawStr = String(row._raw ?? "").trim();
-    if (!/^\S+\.conf\s/.test(rawStr)) continue;
-    for (const { file, content } of splitRaw(rawStr, splunkBase)) {
-      const isStanza = /^\[.+\]$/.test(content);
-      if (isStanza) currentStanza = content.slice(1, -1);
-      if (currentStanza !== stanza) continue;
-      out.push({ file, content, isStanza, stanza: currentStanza });
-    }
-  }
-  return out;
-}
+import { parseBtoolRows, type BtoolRow } from "../../utils/btool";
 
 const PREVIEW_ROWS = 25;
 
 interface Props {
-  conf: string;           // e.g. "server"
-  stanza: string;         // e.g. "shclustering"
-  headerLabel: string;    // e.g. "SHC Clustering Config"
-  headerKey?: string;     // attribute to show in header after label, e.g. "shcluster_label"
+  conf: string;
+  stanza: string;
+  headerLabel: string;
+  headerKey?: string;
   descriptions?: Record<string, string>;
 }
 
@@ -107,7 +18,7 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
   const spl = `| btool ${conf} list ${stanza} splunk_server=local`;
 
   const [rawRows, setRawRows] = useState<any[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showRaw, setShowRaw]   = useState(false);
   const [loading, setLoading]  = useState(true);
   const [error, setError]      = useState<string | null>(null);
@@ -133,10 +44,6 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
         ?.content.replace(`${headerKey} =`, "").trim() ?? null
     : null;
 
-  const kvRows = rows.filter(r => !r.isStanza);
-  const visible = expanded ? kvRows : kvRows.slice(0, PREVIEW_ROWS);
-  const hidden  = kvRows.length - PREVIEW_ROWS;
-
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
       {/* Header */}
@@ -146,15 +53,13 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
             <FileText size={14} className="text-brand-400" />
             <h3 className="text-xs font-semibold text-white">
               {headerLabel}
-              {headerValue && (
-                <span className="text-brand-300 font-mono">: {headerValue}</span>
-              )}
+              {headerValue && <span className="text-brand-300 font-mono">: {headerValue}</span>}
             </h3>
           </div>
           <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{spl}</code>
         </div>
         <div className="flex items-center gap-3">
-          {!loading && rawRows.length > 0 && (
+          {rawRows.length > 0 && (
             <button onClick={() => setShowRaw(s => !s)}
               className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
               {showRaw ? "Hide raw" : "Show raw"}
@@ -184,58 +89,62 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
         </div>
       )}
 
-      {!loading && !error && rawRows.length > 0 && rows.length === 0 && (
-        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
-          <AlertTriangle size={13} />
-          Stanza <code className="font-mono mx-1">[{stanza}]</code> not found in results — it may not be configured on this SH. Use "Show raw" to inspect what was returned.
-        </div>
-      )}
-
       {rows.length > 0 && (
         <>
-          {/* Stanza header row if present */}
-          {rows[0]?.isStanza && (
-            <div className="px-6 pt-4 pb-1 overflow-x-auto">
-              <div className="font-mono text-xs leading-5 flex whitespace-nowrap">
-                <span className="text-gray-500 shrink-0 w-[520px] pr-8">{rows[0].file}</span>
-                <span className="text-emerald-400/80">{rows[0].content}</span>
-              </div>
-            </div>
-          )}
+          {(() => {
+            const groups: { stanza: string; rows: BtoolRow[] }[] = [];
+            let current: { stanza: string; rows: BtoolRow[] } | null = null;
+            for (const row of rows) {
+              if (row.isStanza) {
+                current = { stanza: row.stanza, rows: [row] };
+                groups.push(current);
+              } else if (current) {
+                current.rows.push(row);
+              }
+            }
 
-          {/* Key = value rows */}
-          <div className="px-6 pb-3 overflow-x-auto">
-            <div className="font-mono text-xs leading-5">
-              {visible.map((row, i) => (
-                <div key={i} className="flex whitespace-nowrap">
-                  <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
-                  <span className={
-                    headerKey && row.content.startsWith(`${headerKey} =`)
-                      ? "text-brand-300"
-                      : "text-gray-100"
-                  }>
-                    {row.content}
-                  </span>
+            return groups.map(group => {
+              const isExpanded = expanded.has(group.stanza);
+              const visible = isExpanded ? group.rows : group.rows.slice(0, PREVIEW_ROWS);
+              const hidden = group.rows.length - PREVIEW_ROWS;
+
+              return (
+                <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
+                  <div className="font-mono text-xs leading-5">
+                    {visible.map((row, i) => (
+                      <div key={i} className="flex whitespace-nowrap">
+                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
+                        <span className={
+                          row.isStanza ? "text-emerald-400/80"
+                          : headerKey && row.content.startsWith(`${headerKey} =`) ? "text-brand-300"
+                          : "text-gray-100"
+                        }>
+                          {row.content}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1">
+                    {!isExpanded && hidden > 0 && (
+                      <button
+                        onClick={() => setExpanded(s => new Set([...s, group.stanza]))}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
+                        Show {hidden} more
+                      </button>
+                    )}
+                    {isExpanded && (
+                      <button
+                        onClick={() => setExpanded(s => { const n = new Set(s); n.delete(group.stanza); return n; })}
+                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
+                        Collapse
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-1">
-              {!expanded && hidden > 0 && (
-                <button onClick={() => setExpanded(true)}
-                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
-                  Show {hidden} more
-                </button>
-              )}
-              {expanded && (
-                <button onClick={() => setExpanded(false)}
-                  className="text-xs text-brand-400 hover:text-brand-200 transition-colors">
-                  Collapse
-                </button>
-              )}
-            </div>
-          </div>
+              );
+            });
+          })()}
 
-          {/* Description for headerKey value */}
           {headerValue && descriptions?.[headerValue] && (
             <div className="px-6 pb-3 text-[11px] text-gray-500">
               {descriptions[headerValue]}
@@ -251,21 +160,25 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-surface">
-                  {Object.keys(rawRows[0]).map(col => (
-                    <th key={col} className="text-left px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                      {col}
-                    </th>
-                  ))}
+                  {rawRows[0] && Object.keys(rawRows[0])
+                    .filter(k => !k.startsWith("_") || k === "_raw")
+                    .map(col => (
+                      <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
+                        {col}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
                 {rawRows.map((r, i) => (
                   <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                    {Object.keys(rawRows[0]).map(col => (
-                      <td key={col} className="px-3 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap max-w-xs truncate">
-                        {String(r[col] ?? "")}
-                      </td>
-                    ))}
+                    {Object.keys(rawRows[0])
+                      .filter(k => !k.startsWith("_") || k === "_raw")
+                      .map(col => (
+                        <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
+                          {String(r[col] ?? "")}
+                        </td>
+                      ))}
                   </tr>
                 ))}
               </tbody>
