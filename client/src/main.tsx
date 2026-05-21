@@ -26,7 +26,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <App />,
     children: [
-      { index: true, element: <Navigate to="/shc" replace /> },
+      { index: true, element: <Navigate to="/system-info" replace /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/skipped", element: <SkippedSearchesPage /> },
       { path: "search/slow", element: <SlowSearchesPage /> },

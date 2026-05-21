@@ -1,17 +1,37 @@
 import { useState, useEffect, useCallback } from "react";
-import { Clock, Sun, Moon } from "lucide-react";
+import { Clock, Sun, Moon, RefreshCw } from "lucide-react";
 import { useTheme } from "../../hooks/useTheme";
 import { useGlobalTime, TIME_PRESETS } from "../../hooks/useGlobalTime";
 
 interface Props {
   title: string;
   hideTimePicker?: boolean;
+  /** When provided, shows "cached X min ago" next to the refresh button. */
+  cachedAt?: Date | null;
 }
 
-export function TopBar({ title, hideTimePicker = false }: Props) {
+export function TopBar({ title, hideTimePicker = false, cachedAt }: Props) {
   const { theme, toggle } = useTheme();
   const { label, setTime } = useGlobalTime();
   const [connection, setConnection] = useState<{ connected: boolean; host: string }>({ connected: false, host: "" });
+
+  const [ageLabel, setAgeLabel] = useState<string | null>(null);
+
+  // Update "X min ago" label every 30s
+  useEffect(() => {
+    const update = () => {
+      if (!cachedAt) { setAgeLabel(null); return; }
+      const secs = Math.round((Date.now() - cachedAt.getTime()) / 1000);
+      if (secs < 60) setAgeLabel(`${secs}s ago`);
+      else setAgeLabel(`${Math.floor(secs / 60)}m ago`);
+    };
+    update();
+    const t = setInterval(update, 30_000);
+    return () => clearInterval(t);
+  }, [cachedAt]);
+
+  const fireRefresh = () =>
+    window.dispatchEvent(new CustomEvent("skywalker-page-refresh"));
 
   const checkConnection = useCallback(() => {
     fetch("/api/config", { headers: { "Cache-Control": "no-cache" } })
@@ -42,6 +62,20 @@ export function TopBar({ title, hideTimePicker = false }: Props) {
     <header className="flex h-14 items-center justify-between border-b border-surface-border px-6">
       <h1 className="text-lg font-semibold text-white">{title}</h1>
       <div className="flex items-center gap-3">
+        {/* Per-page refresh */}
+        <button
+          onClick={fireRefresh}
+          title="Refresh this page (busts cache)"
+          className="flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors"
+        >
+          <RefreshCw size={11} />
+          {ageLabel ? (
+            <span className="text-amber-400/80">cached {ageLabel}</span>
+          ) : (
+            <span>Refresh</span>
+          )}
+        </button>
+
         {/* Connection status */}
         <div className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface px-2.5 py-1.5">
           <div

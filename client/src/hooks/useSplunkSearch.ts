@@ -76,10 +76,21 @@ export function useSplunkSearch(
   useEffect(() => {
     execute();
 
+    // Global "refresh current page" event fired by the TopBar refresh button.
+    // Because this hook unmounts with its page component, only the active
+    // page's queries respond — other pages are unaffected.
+    const onPageRefresh = () => execute(true);
+    window.addEventListener("skywalker-page-refresh", onPageRefresh);
+
     if (options.refreshInterval && options.refreshInterval > 0) {
       const interval = setInterval(() => execute(true), options.refreshInterval * 1000);
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("skywalker-page-refresh", onPageRefresh);
+      };
     }
+
+    return () => window.removeEventListener("skywalker-page-refresh", onPageRefresh);
   }, [execute, options.refreshInterval]);
 
   return { data, loading, error, sid, cachedAt, refetch: () => execute(true) };
