@@ -136,8 +136,15 @@ export function SearchAnalyzerPage() {
       }
 
       setSid(trimmed);
-      // Default to inspector if job data available, else log
-      setActiveTab(hasJob || jobResult.status === "fulfilled" ? "inspector" : "log");
+      // Default to best available tab
+      const jobOk  = jobResult.status === "fulfilled" && jobResult.value?.data?.entry?.[0]?.content;
+      const logOk  = logResult.status === "fulfilled";
+      const auditOk = auditResult.status === "fulfilled" && (auditResult.value?.results ?? []).length > 0;
+      const idxOk   = indexerResult.status === "fulfilled" && (indexerResult.value?.results ?? []).length > 0;
+      if (jobOk)       setActiveTab("inspector");
+      else if (logOk)  setActiveTab("log");
+      else if (auditOk) setActiveTab("audit");
+      else if (idxOk)  setActiveTab("indexers");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -145,7 +152,7 @@ export function SearchAnalyzerPage() {
     }
   }, [input, earliest, latest]);
 
-  const hasResults = !!sid && (hasJob || log !== null);
+  const hasResults = !!sid && (hasJob || log !== null || auditRows.length > 0 || indexerRows.length > 0);
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "inspector", label: "Job Inspector" },
