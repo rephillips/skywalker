@@ -420,7 +420,7 @@ export function KnowledgeBundlePage() {
 
   return (
     <div className="flex-1 flex flex-col">
-      <TopBar title="Knowledge Bundle" />
+      <TopBar title="Knowledge Bundle" hideTimePicker />
       <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
       </div>
