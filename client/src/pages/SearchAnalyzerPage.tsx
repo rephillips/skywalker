@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Search, Loader2, Filter, Copy, Check, Play, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Loader2, Filter, Copy, Check, Play } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
@@ -74,7 +74,6 @@ export function SearchAnalyzerPage() {
   const [activeTab, setActiveTab]     = useState<Tab>("inspector");
   const [earliest, setEarliest]       = useState("-7d");
   const [latest, setLatest]           = useState("now");
-  const [showAdhoc, setShowAdhoc]     = useState(false);
   const [adhocSpl, setAdhocSpl]       = useState("");
   const [adhocLoading, setAdhocLoading] = useState(false);
   const [adhocError, setAdhocError]   = useState<string | null>(null);
@@ -190,9 +189,60 @@ export function SearchAnalyzerPage() {
 
       <div className="flex-1 overflow-hidden px-5 py-4 flex flex-col gap-4 min-h-0">
 
-        {/* ── SID input card ── */}
-        <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-4 shrink-0">
-          <div className="flex items-end gap-3 mb-3">
+        {/* ── Input card ── */}
+        <div className="rounded-xl border border-emerald-500/20 bg-surface-raised p-4 shrink-0 flex flex-col gap-4">
+
+          {/* Time range — shared */}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">Earliest</label>
+              <input type="text" value={earliest} onChange={e => setEarliest(e.target.value)}
+                placeholder="-7d"
+                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-gray-500">Latest</label>
+              <input type="text" value={latest} onChange={e => setLatest(e.target.value)}
+                placeholder="now"
+                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28" />
+            </div>
+          </div>
+
+          {/* Ad-hoc search */}
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] uppercase tracking-wide text-gray-500">Run a search</label>
+            <textarea
+              value={adhocSpl}
+              onChange={e => setAdhocSpl(e.target.value)}
+              onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runAdhoc(); } }}
+              rows={3}
+              spellCheck={false}
+              placeholder="Enter SPL — runs the search, captures the SID, then analyzes it"
+              className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 resize-none leading-5 placeholder:text-gray-600"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={runAdhoc}
+                disabled={adhocLoading || !adhocSpl.trim()}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {adhocLoading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                Run & Analyze
+              </button>
+              <span className="text-[10px] text-gray-600">⌘+Enter to run</span>
+            </div>
+            {adhocError && <ErrorAlert message={adhocError} />}
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-surface-border" />
+            <span className="text-[10px] text-gray-600 uppercase tracking-wide">or analyze by SID</span>
+            <div className="flex-1 h-px bg-surface-border" />
+          </div>
+
+          {/* SID input */}
+          <div className="flex items-end gap-3">
             <div className="flex flex-col gap-1 flex-1">
               <label className="text-[10px] uppercase tracking-wide text-gray-500">Search Job ID (SID)</label>
               <input
@@ -205,28 +255,6 @@ export function SearchAnalyzerPage() {
                 className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 placeholder:text-gray-600"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] uppercase tracking-wide text-gray-500">Earliest</label>
-              <input
-                type="text"
-                value={earliest}
-                onChange={e => setEarliest(e.target.value)}
-                placeholder="-24h"
-                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] uppercase tracking-wide text-gray-500">Latest</label>
-              <input
-                type="text"
-                value={latest}
-                onChange={e => setLatest(e.target.value)}
-                placeholder="now"
-                className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-gray-200 outline-none focus:border-emerald-500/60 w-28"
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
             <button
               id="analyze-btn"
               onClick={analyze}
@@ -236,43 +264,7 @@ export function SearchAnalyzerPage() {
               {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
               Analyze
             </button>
-            <button
-              onClick={() => setShowAdhoc(o => !o)}
-              className="flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              {showAdhoc ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              Run ad-hoc search
-            </button>
           </div>
-          <p className="mt-1.5 text-[10px] text-gray-600">⌘+Enter to analyze</p>
-
-          {/* Ad-hoc search */}
-          {showAdhoc && (
-            <div className="mt-3 pt-3 border-t border-surface-border flex flex-col gap-2">
-              <label className="text-[10px] uppercase tracking-wide text-gray-500">SPL Query</label>
-              <textarea
-                value={adhocSpl}
-                onChange={e => setAdhocSpl(e.target.value)}
-                onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); runAdhoc(); } }}
-                rows={3}
-                spellCheck={false}
-                placeholder="e.g. index=_internal | stats count by sourcetype"
-                className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-500/60 resize-none leading-5 placeholder:text-gray-600"
-              />
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={runAdhoc}
-                  disabled={adhocLoading || !adhocSpl.trim()}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap"
-                >
-                  {adhocLoading ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
-                  Run & Analyze
-                </button>
-                <p className="text-[10px] text-gray-600">Runs the search, captures the SID, then analyzes it</p>
-              </div>
-              {adhocError && <div className="mt-1"><ErrorAlert message={adhocError} /></div>}
-            </div>
-          )}
 
           {error && (
             <div className="mt-3">
