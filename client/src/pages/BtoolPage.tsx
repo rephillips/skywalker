@@ -488,7 +488,7 @@ export function BtoolPage() {
                                 <span className="text-gray-500 shrink-0 w-[520px] pr-8 overflow-hidden" title={row.file}>
                                   {row.file}
                                 </span>
-                                <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>
+                                <span className={`ml-4 ${row.isStanza ? "text-emerald-400/80" : "text-gray-100"}`}>
                                   {row.content}
                                 </span>
                               </div>
