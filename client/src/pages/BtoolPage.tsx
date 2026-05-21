@@ -8,6 +8,7 @@ import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
 import { CopyButton } from "../components/common/CopyButton";
 import { parseBtoolRows, type BtoolRow } from "../utils/btool";
+import { BundleFilesPanel } from "../components/panels/BundleFilesPanel";
 import type { SplunkResult } from "../types/splunk";
 
 // ─── Reference data ───────────────────────────────────────────────────────────
@@ -418,35 +419,42 @@ export function BtoolPage() {
                 </div>
               )}
 
-              {/* SPL preview */}
-              <div className="flex items-start gap-2">
-                <div className="flex-1 relative">
-                  <textarea value={spl} onChange={e => { setSpl(e.target.value); setSplEdited(true); }}
-                    rows={2} spellCheck={false}
-                    onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run(); } }}
-                    className="w-full rounded-lg border border-emerald-500/30 bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-400/60 resize-none leading-5" />
-                  {splEdited && (
-                    <button onClick={() => { setSplEdited(false); setSpl(buildSpl(cmdType, opts)); }}
-                      className="absolute top-1.5 right-1.5 text-[9px] text-gray-600 hover:text-gray-400 transition-colors">
-                      reset
+              {/* SPL preview — hidden for bundlefiles (panel runs its own query) */}
+              {cmdType !== "bundlefiles" && (
+                <>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 relative">
+                      <textarea value={spl} onChange={e => { setSpl(e.target.value); setSplEdited(true); }}
+                        rows={2} spellCheck={false}
+                        onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run(); } }}
+                        className="w-full rounded-lg border border-emerald-500/30 bg-surface px-3 py-2 text-xs font-mono text-emerald-300 outline-none focus:border-emerald-400/60 resize-none leading-5" />
+                      {splEdited && (
+                        <button onClick={() => { setSplEdited(false); setSpl(buildSpl(cmdType, opts)); }}
+                          className="absolute top-1.5 right-1.5 text-[9px] text-gray-600 hover:text-gray-400 transition-colors">
+                          reset
+                        </button>
+                      )}
+                    </div>
+                    <CopyButton text={spl} />
+                    <button onClick={run} disabled={loading}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap">
+                      {loading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                      Run
                     </button>
-                  )}
-                </div>
-                <CopyButton text={spl} />
-                <button onClick={run} disabled={loading}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap">
-                  {loading ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-                  Run
-                </button>
-              </div>
-              <p className="mt-1.5 text-[10px] text-gray-600">⌘+Enter to run</p>
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-gray-600">⌘+Enter to run</p>
+                </>
+              )}
             </div>
           </div>
 
           {error && <ErrorAlert message={error} />}
 
-          {/* Results */}
-          {rawResults.length > 0 && !loading && (
+          {/* Bundlefiles — dedicated panel with full KnowledgeBundlePage output */}
+          {cmdType === "bundlefiles" && <BundleFilesPanel />}
+
+          {/* Results — generic btool two-column output */}
+          {cmdType !== "bundlefiles" && rawResults.length > 0 && !loading && (
             <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between px-4 py-2 border-b border-surface-border shrink-0 gap-3">
                 <div className="flex items-center gap-3">
