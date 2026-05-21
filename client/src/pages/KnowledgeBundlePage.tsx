@@ -775,6 +775,30 @@ export function KnowledgeBundlePage() {
       <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
         <ReplicationBlacklistPanel />
+
+        {/* Blacklist example */}
+        <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
+          <div className="px-4 py-3 border-b border-surface-border">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-brand-400" />
+              <h3 className="text-xs font-semibold text-white">How to blacklist files from the knowledge bundle</h3>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1.5 pl-5">
+              Apply the following to <code className="font-mono text-emerald-300">distsearch.conf</code> on each search head to exclude lookup files from bundle replication.
+            </p>
+          </div>
+          <div className="px-4 py-3 overflow-x-auto">
+            <pre className="font-mono text-[11px] leading-5 text-emerald-300 whitespace-pre">{`[replicationBlacklist]
+no_lookup1 = apps/<app1>/lookups/file1.csv
+no_lookup2 = apps/<app2>/lookups/file2.csv`}</pre>
+          </div>
+          <div className="px-4 pb-3 text-[10px] text-gray-500 space-y-1">
+            <p>Each key must be unique within the stanza — use a descriptive name (e.g. <code className="font-mono">no_lookup1</code>).</p>
+            <p>The value is a regex matched against the bundle-relative file path. Anchoring is not implicit — use <code className="font-mono text-emerald-300">\.csv$</code> to match only at the end.</p>
+            <p>Changes take effect after a bundle push. Verify the file no longer appears in the bundle files list above.</p>
+          </div>
+        </div>
+
         <BundleFilesPanel />
       </div>
       <div className="p-6 max-w-4xl">
