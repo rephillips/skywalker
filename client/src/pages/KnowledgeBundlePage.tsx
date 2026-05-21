@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { RefreshCw, Loader2, Package, Crown, Server, AlertTriangle, Archive, ChevronDown, ChevronUp } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
 import { ErrorAlert } from "../components/common/ErrorAlert";
-import { parseBtoolRows, type BtoolRow } from "../utils/btool";
+import { BtoolStanzaPanel } from "../components/panels/BtoolStanzaPanel";
 
 interface BundleInfo {
   [key: string]: any;
@@ -18,6 +18,167 @@ const POLICY_DESCRIPTIONS: Record<string, string> = {
   none:           "No replication — each SH uses its own local bundle",
 };
 
+interface BtoolRow {
+  file: string;
+  content: string;   // "[stanza]" or "key = value"
+  isStanza: boolean;
+  stanza: string;    // current stanza name (no brackets)
+  rawObj: any;
+}
+
+function parseBtoolRows(results: any[]): BtoolRow[] {
+  if (!results.length) return [];
+
+  // Prefer _raw parsing — gives us the full file path directly.
+  // btool output format: "/path/to/file.conf    key = value" (one per line).
+  // When Splunk returns _raw, the lines may be real-newline-separated OR
+  // concatenated into one string. Try newlines first (no ambiguity), then
+  // fall back to a regex that anchors on the detected installation base path.
+  const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
+  if (hasRawPaths) {
+    // Detect the Splunk installation base (e.g. /opt/splunk or /home/splunk)
+    // from the first absolute path seen in any _raw field.
+    const firstPath = String(results.find(r => /^\//.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
+    const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
+    const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
+    const escapedBase = splunkBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    function splitRaw(rawStr: string): Array<{ file: string; content: string }> {
+      // Case 1: real newlines present — each line is unambiguously one btool entry
+      const byNewline = rawStr.split(/\r?\n/).map(l => l.trim()).filter(l => /^\S+\.conf\s/.test(l));
+      if (byNewline.length > 1) {
+        return byNewline.flatMap(line => {
+          const m = line.match(/^(\S+\.conf)\s{2,}(.*)/);
+          return m ? [{ file: m[1], content: m[2].trim() }] : [];
+        });
+      }
+      // Case 2: concatenated — anchor the lookahead on the installation base path
+      // so values containing paths (S3 URLs, conf paths) don't cause early splits.
+      const lineRe = new RegExp(`(\\S+\\.conf)\\s{2,}(.*?)(?=${escapedBase}\\/|$)`, "gs");
+      return [...rawStr.matchAll(lineRe)].map(m => ({ file: m[1], content: m[2].trim() }));
+    }
+
+    const out: BtoolRow[] = [];
+    let currentStanza = "";
+    for (const row of results) {
+      const rawStr = String(row._raw ?? "").trim();
+      if (!rawStr.startsWith("/")) continue;
+      for (const { file, content } of splitRaw(rawStr)) {
+        const isStanza = /^\[.+\]$/.test(content);
+        if (isStanza) currentStanza = content.slice(1, -1);
+        if (currentStanza !== "replicationSettings") continue;
+        out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+      }
+    }
+    if (out.length > 0) return out;
+  }
+
+  const allFields = Object.keys(results[0]).filter(k => !k.startsWith("_"));
+
+  // Detect Admin's Little Helper BTOOL.* format
+  const isBtoolFormat = allFields.some(k => /^btool\./i.test(k));
+
+  if (isBtoolFormat) {
+    const prefixField = allFields.find(k => /^btool\.cmd\.prefix$/i.test(k));
+    const confField   = allFields.find(k => /^btool\.cmd\.conf$/i.test(k));
+    const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
+    // File path: check ALL fields including _ prefixed (e.g. _raw) for a path value
+    const allFieldsIncRaw = Object.keys(results[0]);
+    const fileField = allFieldsIncRaw.find(k =>
+      results.some(r => /^\/opt\/splunk/.test(String(r[k] ?? "")))
+    ) ?? allFieldsIncRaw.find(k =>
+      results.some(r => /^\//.test(String(r[k] ?? "")))
+    );
+    // Setting columns: everything that isn't a BTOOL.* meta field
+    const settingCols = allFields.filter(k => !/^btool\./i.test(k));
+
+    const out: BtoolRow[] = [];
+    let addedStanza = false;
+
+    for (const row of results) {
+      const stanza = prefixField ? String(row[prefixField] ?? "").trim() : "";
+      // Exact match only — exclude replicationSettings:refineConf and any sub-stanzas
+      if (stanza && stanza !== "replicationSettings") continue;
+
+      const file = fileField
+        ? String(row[fileField] ?? "")
+        : confField ? String(row[confField] ?? "") : "";
+
+      if (!addedStanza) {
+        out.push({ file, content: `[${stanza || "replicationSettings"}]`, isStanza: true, stanza: stanza || "replicationSettings", rawObj: row });
+        addedStanza = true;
+      }
+
+      // BTOOL.KEYS is a comma-separated list of all keys in this row
+      const btoolKeysRaw = keysField ? String(row[keysField] ?? "").trim() : "";
+      const keys = btoolKeysRaw
+        ? btoolKeysRaw.split(",").map(k => k.trim()).filter(Boolean)
+        : [];
+
+      if (keys.length > 0) {
+        for (const key of keys) {
+          // Match key to column: dots/underscores stripped, case-insensitive
+          const normalise = (s: string) => s.toUpperCase().replace(/[\._]/g, "");
+          const matchCol = settingCols.find(c => normalise(c) === normalise(key));
+          const val = matchCol ? String(row[matchCol] ?? "").trim() : "";
+          if (!val) continue; // skip attributes with no value (refineConf rows)
+          out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+        }
+      } else {
+        // Fallback: one row per non-empty setting column
+        for (const col of settingCols) {
+          const val = String(row[col] ?? "").trim();
+          if (!val) continue;
+          out.push({ file, content: `${col} = ${val}`, isStanza: false, stanza: stanza || "replicationSettings", rawObj: row });
+        }
+      }
+    }
+
+    // Deduplicate by key name — keep first occurrence (highest precedence in merge chain)
+    const seenKeys = new Set<string>();
+    return out.filter(row => {
+      if (row.isStanza) return true;
+      const key = row.content.split(" = ")[0].trim();
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+  }
+
+  // Classic format: one field has a file path, others have key/value
+  const fileField = allFields.find(k => String(results[0][k]).startsWith("/")) ?? allFields[0];
+  const otherFields = allFields.filter(k => k !== fileField);
+
+  const getContent = (row: any): string => {
+    if (otherFields.length === 0) return "";
+    if (otherFields.length === 1) return String(row[otherFields[0]] ?? "");
+    const attrField = otherFields.find(k => k === "attribute" || k === "key") ?? otherFields[0];
+    const valField  = otherFields.find(k => k === "value") ?? otherFields[1];
+    const attr = String(row[attrField] ?? "").trim();
+    const val  = String(row[valField]  ?? "").trim();
+    if (!attr) return val;
+    if (!val || attr.startsWith("[")) return attr;
+    return `${attr} = ${val}`;
+  };
+
+  const out: BtoolRow[] = [];
+  let currentStanza = "";
+  for (const row of results) {
+    const file    = String(row[fileField] ?? "");
+    const content = getContent(row).trim();
+    const isStanza = /^\[.+\]$/.test(content);
+    if (isStanza) currentStanza = content.replace(/^\[/, "").replace(/\]$/, "");
+    if (currentStanza !== "replicationSettings") continue;
+    out.push({ file, content, isStanza, stanza: currentStanza, rawObj: row });
+  }
+  return out.length > 0 ? out : results.map(row => ({
+    file: String(row[fileField] ?? ""),
+    content: getContent(row),
+    isStanza: false,
+    stanza: "",
+    rawObj: row,
+  }));
+}
 
 const PREVIEW_ROWS = 25;
 
@@ -63,7 +224,7 @@ function ReplicationSettingsPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const rows = parseBtoolRows(rawRows, "replicationSettings");
+  const rows = parseBtoolRows(rawRows);
   const policy = rows.find(r => r.content.startsWith("replicationPolicy ="))
     ?.content.replace("replicationPolicy =", "").trim() ?? null;
 
@@ -150,7 +311,7 @@ function ReplicationSettingsPanel() {
                   <div className="font-mono text-xs leading-5">
                     {visible.map((row, i) => (
                       <div key={i} className="flex whitespace-nowrap">
-                        <span className="text-gray-400 shrink-0 w-[520px] pr-8 overflow-hidden" title={row.file}>{row.file}</span>
+                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
                         <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>{row.content}</span>
                       </div>
                     ))}
@@ -218,163 +379,6 @@ function ReplicationSettingsPanel() {
   );
 }
 
-const BLACKLIST_SPL = `| btool distsearch list replicationBlacklist splunk_server=local`;
-
-function ReplicationBlacklistPanel() {
-  const [rawRows, setRawRows] = useState<any[]>([]);
-  const [showRaw, setShowRaw] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [loading, setLoading]  = useState(true);
-  const [error, setError]      = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.search(BLACKLIST_SPL);
-      setRawRows(res.results ?? []);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const rows = parseBtoolRows(rawRows, "replicationBlacklist");
-
-  return (
-    <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <FileText size={14} className="text-brand-400" />
-            <h3 className="text-xs font-semibold text-white">Replication Blacklist</h3>
-          </div>
-          <code className="text-[10px] font-mono text-emerald-400/60 pl-5">{BLACKLIST_SPL}</code>
-        </div>
-        <div className="flex items-center gap-3">
-          {rawRows.length > 0 && (
-            <button onClick={() => setShowRaw(s => !s)} className="text-[10px] text-brand-400 hover:text-brand-50 transition-colors">
-              {showRaw ? "Hide raw" : "Show raw"}
-            </button>
-          )}
-          <button onClick={load} disabled={loading}
-            className="flex items-center gap-1.5 rounded-md bg-surface border border-surface-border px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 hover:bg-surface-hover transition-colors disabled:opacity-50">
-            {loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {error && <div className="p-3"><ErrorAlert message={error} /></div>}
-
-      {loading && !rawRows.length && (
-        <div className="p-6 text-center">
-          <Loader2 size={20} className="mx-auto mb-2 text-brand-400 animate-spin" />
-          <p className="text-[11px] text-gray-500">Running btool...</p>
-        </div>
-      )}
-
-      {!loading && !error && rawRows.length === 0 && (
-        <div className="p-4 flex items-center gap-2 text-[11px] text-amber-400">
-          <AlertTriangle size={13} />
-          No results — Admin&apos;s Little Helper app may not be installed on this SH.
-        </div>
-      )}
-
-      {rows.length > 0 && (
-        <>
-          {(() => {
-            const groups: { stanza: string; rows: BtoolRow[] }[] = [];
-            let current: { stanza: string; rows: BtoolRow[] } | null = null;
-            for (const row of rows) {
-              if (row.isStanza) {
-                current = { stanza: row.stanza, rows: [row] };
-                groups.push(current);
-              } else if (current) {
-                current.rows.push(row);
-              }
-            }
-
-            return groups.map(group => {
-              const isExpanded = expanded.has(group.stanza);
-              const visible = isExpanded ? group.rows : group.rows.slice(0, PREVIEW_ROWS);
-              const hidden = group.rows.length - PREVIEW_ROWS;
-
-              return (
-                <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
-                  <div className="font-mono text-xs leading-5">
-                    {visible.map((row, i) => (
-                      <div key={i} className="flex whitespace-nowrap">
-                        <span className="text-gray-400 shrink-0 w-[520px] pr-8 overflow-hidden" title={row.file}>{row.file}</span>
-                        <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>{row.content}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-1">
-                    {!isExpanded && hidden > 0 && (
-                      <button
-                        onClick={() => setExpanded(s => new Set([...s, group.stanza]))}
-                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
-                      >
-                        Show {hidden} more
-                      </button>
-                    )}
-                    {isExpanded && (
-                      <button
-                        onClick={() => setExpanded(s => { const n = new Set(s); n.delete(group.stanza); return n; })}
-                        className="text-xs text-brand-400 hover:text-brand-200 transition-colors"
-                      >
-                        Collapse
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            });
-          })()}
-
-          {showRaw && (
-            <div className="border-t border-surface-border p-4">
-              <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-3">Raw rows — all fields</div>
-              <div className="overflow-x-auto rounded border border-surface-border">
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-surface">
-                      {rawRows[0] && Object.keys(rawRows[0])
-                        .filter(k => !k.startsWith("_") || k === "_raw")
-                        .map(col => (
-                          <th key={col} className="text-left px-4 py-2 text-[10px] font-medium uppercase tracking-wide text-gray-500 border-b border-surface-border whitespace-nowrap">
-                            {col}
-                          </th>
-                        ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rawRows.map((r, i) => (
-                      <tr key={i} className="border-b border-surface-border/40 hover:bg-surface-hover/20">
-                        {Object.keys(rawRows[0])
-                          .filter(k => !k.startsWith("_") || k === "_raw")
-                          .map(col => (
-                            <td key={col} className="px-4 py-1.5 font-mono text-gray-300 align-top whitespace-nowrap">
-                              {String(r[col] ?? "")}
-                            </td>
-                          ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 const BUNDLE_SPL = `| bundlefiles
 | eval file=coalesce(kvstore_app . "." . kvstore_collection,path)
 | stats max(_time) as _time max(bundle_epoch) as bundle_epoch count values(kvstore_collection) as kvstore sum(bytes) as bytes values(source) AS source by file host
@@ -404,12 +408,12 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 function BundleFilesPanel() {
-  const [rows, setRows]           = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [search, setSearch]       = useState("");
-  const [sortKey, setSortKey]     = useState<SortKey>("bytes");
-  const [sortDir, setSortDir]     = useState<SortDir>("desc");
+  const [rows, setRows]         = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [search, setSearch]     = useState("");
+  const [sortKey, setSortKey]   = useState<SortKey>("bytes");
+  const [sortDir, setSortDir]   = useState<SortDir>("desc");
   const [collapsed, setCollapsed] = useState(false);
   const [filesExpanded, setFilesExpanded] = useState(false);
 
@@ -448,11 +452,11 @@ function BundleFilesPanel() {
     else { setSortKey(col); setSortDir(col === "bytes" ? "desc" : "asc"); }
   };
 
-  const handleSearch = (val: string) => { setSearch(val); setFilesExpanded(false); };
-
   const filtered = allFiles.filter(r =>
     !search || String(r.display ?? "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleSearch = (val: string) => { setSearch(val); setFilesExpanded(false); };
 
   const sorted = [...filtered].sort((a, b) => {
     let av: any = a[sortKey], bv: any = b[sortKey];
@@ -623,31 +627,11 @@ export function KnowledgeBundlePage() {
       <TopBar title="Knowledge Bundle" hideTimePicker />
       <div className="px-6 pt-6">
         <ReplicationSettingsPanel />
-        <ReplicationBlacklistPanel />
-
-        {/* Blacklist example */}
-        <div className="rounded-xl border border-emerald-500/20 bg-surface-raised mb-6 overflow-hidden">
-          <div className="px-4 py-3 border-b border-surface-border">
-            <div className="flex items-center gap-2">
-              <FileText size={14} className="text-brand-400" />
-              <h3 className="text-xs font-semibold text-white">How to blacklist files from the knowledge bundle</h3>
-            </div>
-            <p className="text-[11px] text-gray-400 mt-1.5 pl-5">
-              Apply the following to <code className="font-mono text-emerald-300">distsearch.conf</code> on each search head to exclude lookup files from bundle replication.
-            </p>
-          </div>
-          <div className="px-4 py-3 overflow-x-auto">
-            <pre className="font-mono text-[11px] leading-5 text-emerald-300 whitespace-pre">{`[replicationBlacklist]
-no_lookup1 = apps/<app1>/lookups/file1.csv
-no_lookup2 = apps/<app2>/lookups/file2.csv`}</pre>
-          </div>
-          <div className="px-4 pb-3 text-[10px] text-gray-500 space-y-1">
-            <p>Each key must be unique within the stanza — use a descriptive name (e.g. <code className="font-mono">no_lookup1</code>).</p>
-            <p>The value is a regex matched against the bundle-relative file path. Anchoring is not implicit — use <code className="font-mono text-emerald-300">\.csv$</code> to match only at the end.</p>
-            <p>Changes take effect after a bundle push. Verify the file no longer appears in the bundle files list above.</p>
-          </div>
-        </div>
-
+        <BtoolStanzaPanel
+          conf="distsearch"
+          stanza="replicationBlacklist"
+          headerLabel="Replication Blacklist"
+        />
         <BundleFilesPanel />
       </div>
       <div className="p-6 max-w-4xl">
