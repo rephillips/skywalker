@@ -13,7 +13,7 @@ export default function App() {
 
   function handleConnected() {
     setIsConnected(true);
-    navigate("/shc", { replace: true });
+    navigate("/system-info", { replace: true });
   }
 
   return (
