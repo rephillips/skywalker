@@ -72,7 +72,7 @@ export function SearchAnalyzerPage() {
   const [auditRows, setAuditRows]     = useState<any[]>([]);
   const [indexerRows, setIndexerRows] = useState<any[]>([]);
   const [activeTab, setActiveTab]     = useState<Tab>("inspector");
-  const [earliest, setEarliest]       = useState("-24h");
+  const [earliest, setEarliest]       = useState("-7d");
   const [latest, setLatest]           = useState("now");
 
   const analyze = useCallback(async () => {
@@ -86,7 +86,7 @@ export function SearchAnalyzerPage() {
     setIndexerRows([]);
     setSid("");
 
-    const auditSpl   = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='${trimmed}'`;
+    const auditSpl   = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id=*${trimmed}*`;
     const indexerSpl = `index=_internal source=*remote_searches.log host IN (idx-i-*) search_id=*${trimmed}* | stats max(elapsedTime) as elapsedTime by host`;
 
     try {
