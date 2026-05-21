@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   Terminal, Play, Loader2, Filter, ChevronDown, ChevronUp,
-  BookOpen, AlertTriangle, List, Layers, Package,
+  BookOpen, List, Layers, Package,
 } from "lucide-react";
 import { TopBar } from "../components/layout/TopBar";
 import { api } from "../services/api";
@@ -54,20 +54,6 @@ const REFERENCE = [
     ],
   },
   {
-    id: "btoolcheck", icon: AlertTriangle, title: "btoolcheck",
-    syntax: "| btoolcheck [app=<app>] [conf=<conf>]",
-    description: "Scan all conf files across all apps for errors, typos, and invalid keys. Requires the btoolcheck app. Filter by app or conf type to narrow results.",
-    flags: [
-      { f: "app=<name>",  d: "Limit to a specific app" },
-      { f: "conf=<name>", d: "Limit to a specific conf file" },
-    ],
-    examples: [
-      "| btoolcheck",
-      "| btoolcheck app=search",
-      "| btoolcheck conf=props",
-    ],
-  },
-  {
     id: "bundlefiles", icon: Package, title: "bundlefiles",
     syntax: "| bundlefiles [bundle=computed|computed_exclusions]",
     description: "List all files in the search head knowledge bundle with sizes and timestamps. Use to audit bundle size, find large lookups, or diagnose replication issues.",
@@ -85,18 +71,18 @@ const REFERENCE = [
 
 // ─── Command builder ──────────────────────────────────────────────────────────
 
-type CmdType = "list" | "layer" | "btoolcheck" | "bundlefiles";
+type CmdType = "list" | "layer" | "bundlefiles";
 
 interface BuilderOpts {
   confname: string; stanza: string; debug: boolean; app: string;
   allapps: boolean; kvpairs: boolean; user: string; splunkServer: string;
-  sourcetype: string; source: string; btoolApp: string; btoolConf: string; bundleType: string;
+  sourcetype: string; source: string; bundleType: string;
 }
 
 const DEFAULT_OPTS: BuilderOpts = {
   confname: "distsearch", stanza: "", debug: false, app: "",
   allapps: false, kvpairs: false, user: "", splunkServer: "local",
-  sourcetype: "", source: "", btoolApp: "", btoolConf: "", bundleType: "",
+  sourcetype: "", source: "", bundleType: "",
 };
 
 function buildSpl(type: CmdType, o: BuilderOpts): string {
@@ -118,12 +104,6 @@ function buildSpl(type: CmdType, o: BuilderOpts): string {
       if (o.source)     p.push(`--source="${o.source}"`);
       if (o.debug)      p.push("--debug");
       p.push(`splunk_server=${o.splunkServer || "local"}`);
-      return p.join(" ");
-    }
-    case "btoolcheck": {
-      const p = ["| btoolcheck"];
-      if (o.btoolApp)  p.push(`app=${o.btoolApp}`);
-      if (o.btoolConf) p.push(`conf=${o.btoolConf}`);
       return p.join(" ");
     }
     case "bundlefiles": {
@@ -272,7 +252,6 @@ export function BtoolPage() {
   const CMD_TABS: { id: CmdType; label: string }[] = [
     { id: "list",        label: "btool list" },
     { id: "layer",       label: "btool layer" },
-    { id: "btoolcheck",  label: "btoolcheck" },
     { id: "bundlefiles", label: "bundlefiles" },
   ];
 
@@ -295,8 +274,8 @@ export function BtoolPage() {
               <p className="text-[10px] text-gray-600 leading-4">
                 <span className="text-gray-500 font-medium">Requires</span> Admin's Little Helper for{" "}
                 <code className="font-mono text-emerald-300/60">btool list</code> /{" "}
-                <code className="font-mono text-emerald-300/60">bundlefiles</code>, and the btoolcheck app for{" "}
-                <code className="font-mono text-emerald-300/60">btoolcheck</code>.
+                <code className="font-mono text-emerald-300/60">btool list</code> /{" "}
+                <code className="font-mono text-emerald-300/60">bundlefiles</code>.
               </p>
             </div>
           </div>
@@ -376,22 +355,7 @@ export function BtoolPage() {
                   </div>
                 </>)}
 
-                {cmdType === "btoolcheck" && (<>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase tracking-wide text-gray-500">app= (optional)</label>
-                    <input type="text" value={opts.btoolApp} onChange={e => set("btoolApp", e.target.value)}
-                      placeholder="e.g. search"
-                      className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase tracking-wide text-gray-500">conf= (optional)</label>
-                    <input type="text" value={opts.btoolConf} onChange={e => set("btoolConf", e.target.value)}
-                      placeholder="e.g. props" list="conf-files"
-                      className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-xs font-mono text-gray-100 outline-none focus:border-emerald-500/60" />
-                  </div>
-                </>)}
-
-                {cmdType === "bundlefiles" && (
+{cmdType === "bundlefiles" && (
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] uppercase tracking-wide text-gray-500">Bundle type</label>
                     <select value={opts.bundleType} onChange={e => set("bundleType", e.target.value)}
