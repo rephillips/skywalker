@@ -100,6 +100,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [slowHint, setSlowHint] = useState(false);
 
   // On mount: test existing connection — auto-proceed if it works
   useEffect(() => {
@@ -132,6 +133,8 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
     if (!token.trim()) { setError("Enter an API token"); return; }
     setSaving(true);
     setError(null);
+    setSlowHint(false);
+    const slowTimer = setTimeout(() => setSlowHint(true), 8_000);
     try {
       const res = await fetch("/api/config", {
         method: "PUT",
@@ -161,6 +164,8 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      clearTimeout(slowTimer);
+      setSlowHint(false);
       setSaving(false);
     }
   }
@@ -267,6 +272,12 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Plug size={15} />}
                 {saving ? "Connecting…" : "Connect"}
               </button>
+
+              {slowHint && (
+                <p className="text-center text-[11px] text-amber-400/80 animate-pulse">
+                  Still waiting — Splunk may be under heavy load (up to 60s)
+                </p>
+              )}
             </>
           )}
         </div>

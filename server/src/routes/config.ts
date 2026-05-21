@@ -28,9 +28,9 @@ router.put("/config", async (req, res, next) => {
     const { baseUrl, username, password, token } = req.body;
     updateSplunkConfig({ baseUrl, username, password, token });
 
-    // Test the connection with new config
+    // Test the connection with new config — generous timeout for loaded SHs
     try {
-      await splunkFetch("/services/server/info?output_mode=json");
+      await splunkFetch("/services/server/info?output_mode=json", undefined, 60_000);
       res.json({ status: "ok", message: "Configuration updated and connection verified" });
     } catch (err) {
       res.json({ status: "warning", message: `Configuration saved but Splunk unreachable: ${(err as Error).message}` });
@@ -43,7 +43,7 @@ router.put("/config", async (req, res, next) => {
 // Test connection
 router.post("/config/test", async (_req, res) => {
   try {
-    const info = await splunkFetch("/services/server/info?output_mode=json");
+    const info = await splunkFetch("/services/server/info?output_mode=json", undefined, 60_000);
     const serverName = info.entry?.[0]?.content?.serverName;
     res.json({ status: "ok", serverName });
   } catch (err) {

@@ -13,23 +13,35 @@ function authHeader(): string {
   return "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
 }
 
-export async function splunkFetch(path: string, options?: RequestInit): Promise<any> {
+export async function splunkFetch(path: string, options?: RequestInit, timeoutMs = 15_000): Promise<any> {
   const url = `${config.splunk.baseUrl}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    // @ts-expect-error undici dispatcher for TLS bypass
-    dispatcher: tlsAgent,
-    headers: {
-      Authorization: authHeader(),
-      "Cache-Control": "no-cache",
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Splunk API ${res.status}: ${text.slice(0, 200)}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      // @ts-expect-error undici dispatcher for TLS bypass
+      dispatcher: tlsAgent,
+      headers: {
+        Authorization: authHeader(),
+        "Cache-Control": "no-cache",
+        ...options?.headers,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Splunk API ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return res.json();
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Splunk did not respond within ${timeoutMs / 1000}s — it may be under heavy load`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 /** Fetch raw text from Splunk (for search.log etc.) */
