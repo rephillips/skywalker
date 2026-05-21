@@ -29,10 +29,51 @@ function splitRaw(rawStr: string, splunkBase: string): Array<{ file: string; con
 function parseBtoolRows(results: any[], stanza: string): BtoolRow[] {
   if (!results.length) return [];
 
-  const hasRawPaths = results.some(r => /^\//.test(String(r._raw ?? "").trim()));
-  if (!hasRawPaths) return [];
+  const allFields = Object.keys(results[0]);
 
-  const firstPath = String(results.find(r => /^\//.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
+  // Format A: Admin's Little Helper BTOOL.* named fields
+  // _raw = just the file path; data lives in BTOOL.KEYS, BTOOL.STANZA, etc.
+  if (allFields.some(k => /^btool\./i.test(k))) {
+    const keysField   = allFields.find(k => /^btool\.keys$/i.test(k));
+    const stanzaField = allFields.find(k => /^btool\.stanza$/i.test(k));
+    const fileField   = allFields.find(k =>
+      results.some(r => /^\//.test(String(r[k] ?? "")))
+    );
+    const metaFields  = new Set(allFields.filter(k => /^btool\./i.test(k)));
+
+    const out: BtoolRow[] = [];
+    let addedStanza = false;
+
+    for (const row of results) {
+      const rowStanza = stanzaField ? String(row[stanzaField] ?? "").trim() : "";
+      if (rowStanza !== stanza) continue;
+
+      const file = fileField ? String(row[fileField] ?? "") : "";
+      if (!addedStanza) {
+        out.push({ file, content: `[${stanza}]`, isStanza: true, stanza });
+        addedStanza = true;
+      }
+
+      const keys = keysField
+        ? String(row[keysField] ?? "").split(",").map(k => k.trim()).filter(Boolean)
+        : allFields.filter(k => !metaFields.has(k) && !k.startsWith("_"));
+
+      const normalise = (s: string) => s.toUpperCase().replace(/[._]/g, "");
+      for (const key of keys) {
+        const col = allFields.find(c => normalise(c) === normalise(key)) ?? key;
+        const val = String(row[col] ?? "").trim();
+        if (!val) continue;
+        out.push({ file, content: `${key} = ${val}`, isStanza: false, stanza });
+      }
+    }
+    return out;
+  }
+
+  // Format B: _raw contains full btool lines — "/path/to/file.conf    key = value"
+  const hasFullBtoolRaw = results.some(r => /^\S+\.conf\s{2,}/.test(String(r._raw ?? "").trim()));
+  if (!hasFullBtoolRaw) return [];
+
+  const firstPath = String(results.find(r => /^\S+\.conf\s{2,}/.test(String(r._raw ?? "").trim()))?._raw ?? "").trim();
   const baseMatch = firstPath.match(/^(\/[^/]+\/[^/]+)\//);
   const splunkBase = baseMatch ? baseMatch[1] : "/opt/splunk";
 
@@ -41,7 +82,7 @@ function parseBtoolRows(results: any[], stanza: string): BtoolRow[] {
 
   for (const row of results) {
     const rawStr = String(row._raw ?? "").trim();
-    if (!rawStr.startsWith("/")) continue;
+    if (!/^\S+\.conf\s/.test(rawStr)) continue;
     for (const { file, content } of splitRaw(rawStr, splunkBase)) {
       const isStanza = /^\[.+\]$/.test(content);
       if (isStanza) currentStanza = content.slice(1, -1);

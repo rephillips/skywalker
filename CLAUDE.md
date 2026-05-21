@@ -98,22 +98,47 @@ Example: `| btool distsearch list replicationSettings splunk_server=local`
 
 Always use `count=0` when fetching results — this tells the Splunk API to return all rows with no cap. The default is 1000, which silently truncates btool output for large stanzas or deep merge chains. `count=0` is already set in `server/src/services/splunkService.ts` (`executeSearch` → `getJobResults(sid, 0)`). Do not revert this to a fixed number.
 
-### `_raw` format and parsing
+### Result formats
 
-Admin's Little Helper returns btool output in `_raw`. Each logical line is:
+Admin's Little Helper returns btool results in one of two formats depending on the app version installed. **Always detect the format before parsing** — do not assume one or the other.
 
+#### Format A — BTOOL.\* named fields (newer ALH versions)
+
+Detected by: any field name matching `/^btool\./i` (e.g. `BTOOL.KEYS`, `BTOOL.STANZA`).
+
+- `_raw` = **just the source file path** (not the full btool line)
+- `BTOOL.STANZA` = the stanza name for this row
+- `BTOOL.KEYS` = comma-separated list of attribute names present in this row
+- Each attribute in `BTOOL.KEYS` has a matching column with the value (normalise dots/underscores and compare case-insensitively)
+- `BTOOL.CMD.PREFIX` = the stanza filter passed to `list` (use `BTOOL.STANZA` for matching, not this)
+
+Parsing logic:
+1. Detect by checking `Object.keys(results[0]).some(k => /^btool\./i.test(k))`
+2. Filter rows where `BTOOL.STANZA === stanza`
+3. For each matching row, emit a synthetic `[stanza]` header on first row, then one `key = value` row per entry in `BTOOL.KEYS`
+4. Match each key to its column via `key.toUpperCase().replace(/[._]/g, "")` normalisation
+
+#### Format B — `_raw` full btool lines (older ALH versions / standard output)
+
+Detected by: `_raw` matches `/^\S+\.conf\s{2,}/` (path + 2+ spaces + content).
+
+Each logical line in `_raw` is:
 ```
 /opt/splunk/etc/apps/myapp/local/file.conf    [stanzaName]
 /opt/splunk/etc/system/default/file.conf      key = value
 ```
 
-**Critical**: `_raw` per Splunk result row contains ALL lines for that stanza concatenated — there may be no newline characters (the HTML table collapses them visually). Parse with `splitRaw()`:
+**Critical**: `_raw` per Splunk result row may contain ALL lines for a stanza concatenated with no newline characters. Parse with `splitRaw()`:
 
-1. **Try `\n` splitting first** — split `_raw` on `\r?\n`, filter lines matching `/^\S+\.conf\s/`. If you get more than one line this way, parse each as `path + 2+spaces + content`. No ambiguity with path-valued attributes.
-2. **Detect the Splunk base path** from the first absolute path found (e.g. `/opt/splunk`, `/home/splunk`) — use `rawStr.match(/^(\/[^/]+\/[^/]+)\//)`.
-3. **Concatenated fallback** — use regex `(\S+\.conf)\s{2,}(.*?)(?=<escapedBase>\/|$)` with `gs` flags. Anchoring on the detected base path prevents false splits inside S3 URLs (`path = s3://bucket/prefix/`) or other path-valued attributes.
+1. **Try `\n` splitting first** — split `_raw` on `\r?\n`, filter lines matching `/^\S+\.conf\s/`. If more than one line, parse each as `path + 2+spaces + content`.
+2. **Detect Splunk base path** from the first path found — `rawStr.match(/^(\/[^/]+\/[^/]+)\//)`.
+3. **Concatenated fallback** — regex `(\S+\.conf)\s{2,}(.*?)(?=<escapedBase>\/|$)` with `gs` flags. Anchoring on the base path prevents false splits inside path-valued attributes (S3 URLs, etc.).
 
-Track `currentStanza` sequentially across lines so sub-stanzas like `[replicationSettings:refineConf]` are automatically excluded when you only want `[replicationSettings]`.
+Track `currentStanza` sequentially across all result rows so sub-stanzas like `[replicationSettings:refineConf]` are excluded when you only want `[replicationSettings]`.
+
+#### Format detection order
+
+Check Format A first (BTOOL.\* fields), then Format B (`_raw` full lines). If neither matches, return empty and show a "stanza not found / unrecognised format" warning with a "Show raw" debug toggle.
 
 ### Display
 
