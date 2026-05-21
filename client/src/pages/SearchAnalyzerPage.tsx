@@ -87,7 +87,7 @@ export function SearchAnalyzerPage() {
     setSid("");
 
     const auditSpl   = `index=_audit sourcetype=audittrail host IN (sh-i*) action=search info=completed search_id='${trimmed}'`;
-    const indexerSpl = `index=_internal source=*remote_searches.log host IN (idx-i-*) *${trimmed}* | stats max(elapsedTime) as elapsedTime by host`;
+    const indexerSpl = `index=_internal source=*remote_searches.log host IN (idx-i-*) search_id=*${trimmed}* | stats max(elapsedTime) as elapsedTime by host`;
 
     try {
       const [logResult, jobResult, auditResult, indexerResult] = await Promise.allSettled([
