@@ -438,9 +438,18 @@ export function BtoolPage() {
           {rawResults.length > 0 && !loading && (
             <div className="rounded-xl border border-emerald-500/20 bg-surface-raised overflow-hidden flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between px-4 py-2 border-b border-surface-border shrink-0 gap-3">
-                <span className="text-[11px] text-gray-500">
-                  {isBtoolOutput ? `${groups.length} stanza${groups.length !== 1 ? "s" : ""}` : `${filteredRaw.length} rows`}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-gray-500">
+                    {isBtoolOutput ? `${groups.length} stanza${groups.length !== 1 ? "s" : ""}` : `${filteredRaw.length} rows`}
+                  </span>
+                  {CONF_DOCS[opts.confname] && (
+                    <a href={CONF_DOCS[opts.confname]} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-1 text-[11px] font-mono text-emerald-400/70 hover:text-emerald-300 transition-colors">
+                      {opts.confname}.conf spec
+                      <ExternalLink size={10} className="opacity-70" />
+                    </a>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <Filter size={11} className="absolute left-2.5 top-[7px] text-gray-500" />
