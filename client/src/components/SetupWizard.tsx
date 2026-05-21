@@ -91,7 +91,7 @@ function playLightsaberSwoosh() {
   }
 }
 
-type WizardState = "checking" | "form" | "success";
+type WizardState = "checking" | "form" | "success" | "warning";
 
 export function SetupWizard({ onConnected }: { onConnected: () => void }) {
   const [wizState, setWizState] = useState<WizardState>("checking");
@@ -144,9 +144,16 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
         playLightsaberSwoosh();
         window.dispatchEvent(new Event("skywalker-connection-changed"));
         setTimeout(() => onConnected(), 900);
+      } else if (data.status === "warning") {
+        // Config IS saved; the verification call to Splunk failed (TLS hiccup,
+        // transient network issue, etc.) but the token is in memory. Proceed
+        // with a warning so the user can still use the app.
+        setSuccessMsg(data.message || "Config saved — connection could not be verified");
+        setWizState("warning");
+        window.dispatchEvent(new Event("skywalker-connection-changed"));
+        setTimeout(() => onConnected(), 1400);
       } else {
-        // "warning" = config saved but Splunk unreachable; "error" = hard failure
-        // Either way, stay on the form so the user can fix the URL / token.
+        // Hard failure — config may not be saved; stay on the form.
         playErrorBuzz();
         setError(data.message || "Connection failed — check the URL and token");
       }
@@ -176,7 +183,7 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Skywalker</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {wizState === "checking" ? "Checking connection…" : wizState === "success" ? "Connection verified" : "Connect to your Splunk instance"}
+            {wizState === "checking" ? "Checking connection…" : wizState === "success" ? "Connection verified" : wizState === "warning" ? "Config saved" : "Connect to your Splunk instance"}
           </p>
         </div>
 
@@ -196,6 +203,17 @@ export function SetupWizard({ onConnected }: { onConnected: () => void }) {
               <CheckCircle size={28} className="text-emerald-400" />
               <p className="text-sm text-emerald-300 font-medium">{successMsg}</p>
               <p className="text-xs text-gray-500">Loading…</p>
+            </div>
+          )}
+
+          {/* Warning state — config saved but verification failed */}
+          {wizState === "warning" && (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="w-7 h-7 rounded-full border-2 border-amber-400 flex items-center justify-center">
+                <span className="text-amber-400 text-sm font-bold">!</span>
+              </div>
+              <p className="text-sm text-amber-300 font-medium text-center">{successMsg}</p>
+              <p className="text-xs text-gray-500">Proceeding to app…</p>
             </div>
           )}
 
