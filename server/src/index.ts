@@ -5,6 +5,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import healthRouter from "./routes/health.js";
 import searchRouter from "./routes/search.js";
 import configRouter from "./routes/config.js";
+import cloudStatusRouter from "./routes/cloudStatus.js";
 
 async function start() {
   // Prompt for master key if encrypted values exist
@@ -18,6 +19,7 @@ async function start() {
   app.use("/api", healthRouter);
   app.use("/api", searchRouter);
   app.use("/api", configRouter);
+  app.use("/api", cloudStatusRouter);
 
   app.use(errorHandler);
 

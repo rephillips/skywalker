@@ -62,4 +62,8 @@ export const api = {
       body: JSON.stringify({ path, method, body }),
     });
   },
+
+  cloudStatus() {
+    return request<{ status: string; data: any }>("/cloud-status");
+  },
 };
