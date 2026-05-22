@@ -112,8 +112,8 @@ export function BtoolStanzaPanel({ conf, stanza, headerLabel, headerKey, descrip
                 <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
                   <div className="font-mono text-xs leading-5">
                     {visible.map((row, i) => (
-                      <div key={i} className="flex whitespace-nowrap">
-                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
+                      <div key={i} className="flex whitespace-nowrap gap-6">
+                        <span className="text-gray-400 shrink-0 min-w-[480px]">{row.file}</span>
                         <span className={
                           row.isStanza ? "text-emerald-400/80"
                           : headerKey && row.content.startsWith(`${headerKey} =`) ? "text-brand-300"

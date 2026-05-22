@@ -14,7 +14,10 @@ function splitRaw(rawStr: string, escapedBase: string): Array<{ file: string; co
       return m ? [{ file: m[1], content: m[2].trim() }] : [];
     });
   }
-  const lineRe = new RegExp(`(\\S+\\.conf)\\s{2,}(.*?)(?=${escapedBase}\\/|$)`, "gs");
+  // Lookahead anchors on the next *line boundary* — a path ending in .conf followed by
+  // 2+ whitespace chars. This avoids false splits when a value itself contains a path
+  // that starts with the splunk base (e.g. path.2 = /opt/splunk/etc/auth).
+  const lineRe = new RegExp(`(${escapedBase}\\S+\\.conf)[ \\t]{2,}(.*?)(?=${escapedBase}\\S+\\.conf[ \\t]{2,}|$)`, "gs");
   return [...rawStr.matchAll(lineRe)].map(m => ({ file: m[1], content: m[2].trim() }));
 }
 

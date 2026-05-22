@@ -55,7 +55,7 @@ function parseBtoolRows(results: any[]): BtoolRow[] {
       }
       // Case 2: concatenated — anchor the lookahead on the installation base path
       // so values containing paths (S3 URLs, conf paths) don't cause early splits.
-      const lineRe = new RegExp(`(\\S+\\.conf)\\s{2,}(.*?)(?=${escapedBase}\\/|$)`, "gs");
+      const lineRe = new RegExp(`(${escapedBase}\\S+\\.conf)[ \\t]{2,}(.*?)(?=${escapedBase}\\S+\\.conf[ \\t]{2,}|$)`, "gs");
       return [...rawStr.matchAll(lineRe)].map(m => ({ file: m[1], content: m[2].trim() }));
     }
 
@@ -311,8 +311,8 @@ function ReplicationSettingsPanel() {
                 <div key={group.stanza} className="px-6 pt-4 pb-3 overflow-x-auto">
                   <div className="font-mono text-xs leading-5">
                     {visible.map((row, i) => (
-                      <div key={i} className="flex whitespace-nowrap">
-                        <span className="text-gray-400 shrink-0 w-[520px] pr-8">{row.file}</span>
+                      <div key={i} className="flex whitespace-nowrap gap-6">
+                        <span className="text-gray-400 shrink-0 min-w-[480px]">{row.file}</span>
                         <span className={row.isStanza ? "text-emerald-400/80" : "text-gray-100"}>{row.content}</span>
                       </div>
                     ))}
