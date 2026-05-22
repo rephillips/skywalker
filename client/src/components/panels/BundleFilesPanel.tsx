@@ -112,7 +112,7 @@ export function BundleFilesPanel() {
 
       {!collapsed && (
         <div className="flex-1 overflow-auto flex flex-col min-h-0">
-          {error && <div className="p-3 shrink-0"><ErrorAlert message={error} /></div>}
+          {error && <div className="p-3 shrink-0"><ErrorAlert message={error} hint="Requires Admin's Little Helper App to be installed on SHs" /></div>}
 
           {loading && !rows.length && (
             <div className="p-6 text-center">

@@ -435,7 +435,7 @@ export function BtoolPage() {
             </div>
           </div>
 
-          {error && <ErrorAlert message={error} />}
+          {error && <ErrorAlert message={error} hint="Requires Admin's Little Helper App to be installed on SHs" />}
 
           {/* Bundlefiles — dedicated panel with full KnowledgeBundlePage output */}
           {cmdType === "bundlefiles" && <BundleFilesPanel />}
